@@ -101,7 +101,7 @@ public:
     //    Serial.println("Test seriale avviato!"); //x debug
 		
 		tft.init();
-		tft.setRotation(1);
+		tft.setRotation(3);
 		tft.fillScreen(TFT_BLACK);
 
         bleGamepadConfig.setAutoReport(true);  // in false non invia i comandi a windows

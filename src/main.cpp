@@ -4,7 +4,7 @@
 // No longer have to define whether it's an ESP32 or ESP8266, just do an initial compilation and
 //  VSCode will pick  up the right environment from platformio.ini
 
-#define INCLUDE_WIFI true
+#define INCLUDE_WIFI false
 // Less secure if you plan to commit or share your files, but saves a bunch of memory. 
 //  If you hardcode credentials the device will only work in your network
 #define USE_HARDCODED_CREDENTIALS false

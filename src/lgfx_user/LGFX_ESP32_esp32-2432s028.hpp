@@ -50,7 +50,7 @@ public:LGFX(void){
   {                            // 表示パネル制御の設定を行います。
   auto cfg = _panel_instance.config();// Ottieni la struttura per le impostazioni del pannello di visualizzazione.
   cfg.pin_cs = 15; // Numero pin a cui è collegato CS (-1 = disabilitato)
-  cfg.pin_rst = -1; // Numero pin a cui è collegato RST (-1 = disabilitato)
+  cfg.pin_rst = 12; // Numero pin a cui è collegato RST (-1 = disabilitato)
   cfg.pin_busy = -1; // Numero pin a cui è collegato BUSY (-1 = disabilitato)
   cfg.memory_width = 240; // Larghezza massima supportata dall'IC del driver
   cfg.memory_height = 320; // Altezza massima supportata dal driver IC
