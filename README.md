@@ -106,3 +106,40 @@ Some Arduino APIs for the ESP32 are different, so not everything will work out o
 ### How to enable ESP32
 - Open `platformio.ini`, comment out the ESP8266 env and Uncomment the ESP32 env. Also specify your board in the env, by default is set to something like `esp32doit-devkit-v1` because I owned this board, but there are tons of boards for the ESP32, as you can see [here](https://docs.platformio.org/en/latest/boards/index.html#espressif-32). Click on one and it will show you what's its id. 
 - Make sure to use the correct pin numbers for the ESP32 as opposed to aliases such as D1, D2, D3.. etc
+
+# Custom protocol for GT7
+```
+format([DataCorePlugin.GameData.NewData.SpeedKmh],'0') + ';' +
+isnull([DataCorePlugin.GameData.NewData.Gear],'N') + ';' +
+format([CarSettings_CurrentDisplayedRPMPercent],'0') + ';' +
+format([CarSettings_RPMRedLineSetting],'0') + ';' +
+
+left([CurrentLapTime],3,8) + ';' +
+left([LastLapTime],3,8) + ';' +
+left([BestLapTime],3,8) + ';' +
+
+format([PersistantTrackerPlugin.SessionBestLiveDeltaSeconds],'0.000') + ';' +
+format([PersistantTrackerPlugin.SessionBestLiveDeltaProgressSeconds],'0.00') + ';' +
+
+format([DataCorePlugin.Computed.Fuel_RemainingLaps], '0.0') + ';' +
+format([DataCorePlugin.GameRawData.PreRaceStartPositionOrQualiPos], '0') + ';' +
+
+format([DataCorePlugin.GameData.CurrentLap], '0') + '/' +
+format([DataCorePlugin.GameData.TotalLaps], '0') + ';' +
+
+[DataCorePlugin.GameData.ABSActive]  + ';' +
+
+format([DataCorePlugin.GameData.Throttle], '0') + ';' +
+'0' + ';' +
+
+format([DataCorePlugin.GameData.Brake], '0') + ';' +
+'0' + ';' +
+
+'True' + ';' +
+'0' + ';' +
+
+format([FuelPercent], '0') + ';' +
+'0' + ';' +
+
+[LapInvalidated] + ';'
+```

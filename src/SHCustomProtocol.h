@@ -200,15 +200,15 @@ public:
 		if (isTCCutNull == "False")
 			drawCell(COL[0], ROW[4], tcTcCut, "tcTcCut", "TC TC2", "center", TFT_YELLOW, 4, forceUpdate);
 		else
-			drawCell(COL[0], ROW[4], tcLevel, "tcLevel", "TC", "center", TFT_YELLOW, 4, forceUpdate);
-		drawCell(COL[1], ROW[4], absLevel, "absLevel", "ABS", "center", TFT_BLUE, 4, forceUpdate);
-		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "BB", "center", TFT_MAGENTA, 4, forceUpdate);
+			drawCell(COL[0], ROW[4], tcLevel, "tcLevel", "THR", "center", TFT_YELLOW, 4, forceUpdate);
+		drawCell(COL[1], ROW[4], absLevel, "absLevel", "BRK", "center", TFT_BLUE, 4, forceUpdate);
+		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "Fuel%", "center", TFT_MAGENTA, 4, forceUpdate);
 
 		// (tyre pressure)
-		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "FL", "center", TFT_CYAN, 4, forceUpdate);
-		drawCell(COL[4], ROW[3], tyrePressureFrontRight, "tyrePressureFrontRight", "FR", "center", TFT_CYAN, 4, forceUpdate);
-		drawCell(COL[3], ROW[4], tyrePressureRearLeft, "tyrePressureRearLeft", "RL", "center", TFT_CYAN, 4, forceUpdate);
-		drawCell(COL[4], ROW[4], tyrePressureRearRight, "tyrePressureRearRight", "RR", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "RL", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[4], ROW[3], tyrePressureFrontRight, "tyrePressureFrontRight", "POS", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[3], ROW[4], tyrePressureRearLeft, "tyrePressureRearLeft", "LAP", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[4], ROW[4], tyrePressureRearRight, "tyrePressureRearRight", "ABS", "center", TFT_CYAN, 4, forceUpdate);
 	}
 
 	void drawColoredButton(int x, int y, int width, int height, String label, uint16_t color)   //disegna i pulsanti della pagina 2
