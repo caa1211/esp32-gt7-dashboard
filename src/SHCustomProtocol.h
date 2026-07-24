@@ -78,10 +78,21 @@ private:
 
 	static constexpr uint8_t SCREEN_NORMAL_BRIGHTNESS = 255;
 
+	static constexpr bool TOUCH_SCREEN_CONTROL_ENABLED = false;
+	
 	unsigned long gameStoppedTime = 0;
 
 	bool gameStoppedTimerStarted = false;
 	bool screenSleeping = false;
+
+	// 是否由使用者長按手動關閉
+	bool screenOffByUser = false;
+
+	// 記錄上一筆 GT7 執行狀態，用來偵測 False -> True
+	bool previousGameRunning = false;
+
+	// 避免第一筆資料被誤判為狀態切換
+	bool gameRunningInitialized = false;
 
 public:
 	/*
@@ -220,71 +231,118 @@ public:
 			gameRunning == "TRUE" ||
 			gameRunning == "1";
 
-		if (isGameRunning)
-		{
-			// 遊戲已連線，取消關屏倒數
-			gameStoppedTimerStarted = false;
+		/*
+		 * 只有狀態真的從 False -> True，
+		 * 才視為 GT7 新的一次啟動。
+		 */
+		bool gameJustStarted = false;
 
-			// 如果螢幕已休眠，立即恢復背光
-			if (screenSleeping)
-			{
-				screenSleeping = false;
-				tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
-				forceUpdate = true;
-			}
+		if (gameRunningInitialized)
+		{
+			gameJustStarted =
+				!previousGameRunning &&
+				isGameRunning;
 		}
 		else
 		{
-			// 第一次收到遊戲未連線狀態時，開始倒數
+			// 第一筆資料只用來建立初始狀態
+			gameRunningInitialized = true;
+		}
+
+		/*
+		 * GT7 從未執行變成執行：
+		 * 無論之前是自動或手動關屏，都自動亮起。
+		 */
+		if (gameJustStarted)
+		{
+			screenSleeping = false;
+			screenOffByUser = false;
+
+			tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
+
+			forceUpdate = true;
+			gameStoppedTimerStarted = false;
+		}
+
+		if (isGameRunning)
+		{
+			/*
+			 * 遊戲持續執行時，只取消自動休眠倒數。
+			 * 不直接開背光，避免手動關屏後馬上又亮。
+			 */
+			gameStoppedTimerStarted = false;
+		}
+		else
+		{
+			/*
+			 * GT7 未執行時開始五分鐘倒數。
+			 */
 			if (!gameStoppedTimerStarted)
 			{
 				gameStoppedTimerStarted = true;
 				gameStoppedTime = millis();
 			}
 		}
+
+		// 最後再保存本次狀態，供下一筆資料比較
+		previousGameRunning = isGameRunning;
 	}
 
-	// Called once per arduino loop, timing can't be predicted,
-	// but it's called between each command sent to the arduino
-	void loop()
-	{
+void loop()
+{
+    /*
+     * GT7 停止五分鐘，自動關閉背光。
+     */
+    if (!screenSleeping &&
+        gameStoppedTimerStarted &&
+        millis() - gameStoppedTime >= SCREEN_SLEEP_TIMEOUT)
+    {
+        screenSleeping = true;
 
-		if (!screenSleeping &&
-			gameStoppedTimerStarted &&
-			millis() - gameStoppedTime >= SCREEN_SLEEP_TIMEOUT)
-		{
-			screenSleeping = true;
-			tft.setBrightness(0);
-		}
-		if (screenSleeping)
-		{
-			return;
-		}
+        // 這次是自動關屏，不是使用者長按
+        screenOffByUser = false;
 
-		readTouch(); // Leggi il touchscreen dello schermo
+        tft.setBrightness(0);
+    }
 
-        static int lastPage = currentPage;
-        if (currentPage != lastPage) {
-            tft.fillScreen(TFT_BLACK);
-            forceUpdate = true;
-            lastPage = currentPage;
-        }
-		
-		if (currentPage == 1) {
-            drawPage1(forceUpdate);
-        } else {
+    /*
+     * 必須在休眠 return 之前讀取觸控，
+     * 否則暗屏後無法用觸控喚醒。
+     */
+    readTouch();
+
+    if (screenSleeping)
+    {
+        return;
+    }
+
+    static int lastPage = currentPage;
+
+    if (currentPage != lastPage)
+    {
+        tft.fillScreen(TFT_BLACK);
+
+        prevData.clear();
+        prevColor.clear();
+
+        forceUpdate = true;
+        lastPage = currentPage;
+    }
+
+    if (currentPage == 1)
+    {
+        drawPage1(forceUpdate);
+    }
+    else
+    {
+        if (forceUpdate)
+        {
             drawPage2();
         }
+    }
 
-        forceUpdate = false;
-
-		if (tft.getTouch(&touchX, &touchY)) {
-            if (touchX < 50 && touchY < 50) {
-                // Cambia pagina quando tocchi nell'angolo in alto a sinistra
-                currentPage = (currentPage == 1) ? 2 : 1;
-            }
-        }
-	}
+    forceUpdate = false;
+}
 
 	void idle() {}
 
@@ -663,37 +721,62 @@ void drawPage2() // pagina pulsanti
 
 	void readTouch()
 	{
-		if (currentPage == 2) {
-			if (tft.getTouch(&touchX, &touchY)) {
-				int buttonIndex = getTouchButtonIndex(touchX, touchY);
+		/*
+		 * 整體關閉觸控開關屏功能時，
+		 * 不讀取觸控，也不做任何亮屏或關屏動作。
+		 */
+		if (!TOUCH_SCREEN_CONTROL_ENABLED)
+		{
+			return;
+		}
 
-				if (buttonIndex != -1) {
-					// Effetto di pressione
-					int x = (buttonIndex % 3) * (SCREEN_WIDTH / 3);
-					int y = (buttonIndex / 3) * (SCREEN_HEIGHT / 2);
-					drawColoredButton(x, y, SCREEN_WIDTH / 3, SCREEN_HEIGHT / 2, "Pressed", TFT_DARKGREY);
+		static bool wasTouched = false;
 
-					bleGamepad.press(buttonIndex + 1);
-					delay(100); // debounce delay
-					bleGamepad.release(buttonIndex + 1);
+		const bool isTouched =
+			tft.getTouch(&touchX, &touchY);
 
-					// Ripristina il pulsante dopo la pressione
-					String buttonLabels[] = {"Button 1", "Button 2", "Button 3", "Button 4", "Button 5", "Button 6"};
-					uint16_t buttonColors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_ORANGE, TFT_PURPLE};
-					drawColoredButton(x, y, SCREEN_WIDTH / 3, SCREEN_HEIGHT / 2, buttonLabels[buttonIndex], buttonColors[buttonIndex]);
+		/*
+		 * 只處理手指剛碰到螢幕的瞬間。
+		 */
+		if (isTouched && !wasTouched)
+		{
+			if (screenSleeping)
+			{
+				/*
+				 * 暗屏時點一下：亮屏
+				 */
+				screenSleeping = false;
+				screenOffByUser = false;
+
+				tft.setBrightness(
+					SCREEN_NORMAL_BRIGHTNESS);
+
+				forceUpdate = true;
+
+				if (!previousGameRunning)
+				{
+					gameStoppedTimerStarted = true;
+					gameStoppedTime = millis();
+				}
+				else
+				{
+					gameStoppedTimerStarted = false;
 				}
 			}
-		}
-	}
+			else
+			{
+				/*
+				 * 亮屏時點一下：手動關屏
+				 */
+				screenOffByUser = true;
+				screenSleeping = true;
 
-	int getTouchButtonIndex(int x, int y)
-	{
-		int buttonWidth = SCREEN_WIDTH / 3;
-		int buttonHeight = SCREEN_HEIGHT / 2;
-		int col = x / buttonWidth;
-		int row = y / buttonHeight;
-		int index = col + row * 3;
-		return (index < numButtons) ? index : -1; // Restituisce l'indice del pulsante (0 a numButtons-1)
+				tft.setBrightness(0);
+				gameStoppedTimerStarted = false;
+			}
+		}
+
+		wasTouched = isTouched;
 	}
 };
 
