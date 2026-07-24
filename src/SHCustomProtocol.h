@@ -56,7 +56,7 @@ private:
 	String tyrePressureFrontLeft = "00.0";
 	String tyrePressureFrontRight = "00.0";
 	String tyrePressureRearLeft = "00.0";
-	String tyrePressureRearRight = "00.0";
+	String fuelAlertActive = "False";
 	String tcLevel = "0";
 	String tcActive = "0";
 	String absLevel = "0";
@@ -164,15 +164,15 @@ public:
 		tyrePressureRearLeft =
 			FlowSerialReadStringUntil(';');
 
-		// 13：ABS 是否啟動
-		tyrePressureRearRight =
+		// 13：低油量警示
+		fuelAlertActive =
 			FlowSerialReadStringUntil(';');
 
 		// 14：油門百分比
 		tcLevel =
 			FlowSerialReadStringUntil(';');
 
-		// 15：保留欄位，固定為 0
+		// 15：TC 是否介入
 		tcActive =
 			FlowSerialReadStringUntil(';');
 
@@ -180,7 +180,7 @@ public:
 		absLevel =
 			FlowSerialReadStringUntil(';');
 
-		// 17：保留欄位，固定為 0
+		// 17：ABS 是否介入
 		absActive =
 			FlowSerialReadStringUntil(';');
 
@@ -288,6 +288,15 @@ public:
 
 	void idle() {}
 
+	bool isActiveValue(String value)
+	{
+		value.trim();
+		return value == "True" ||
+			   value == "true" ||
+			   value == "TRUE" ||
+			   value == "1";
+	}
+
 	void drawPage1(bool forceUpdate = false) {
 		drawRpmMeter(0, 0, SCREEN_WIDTH, HALF_CELL_HEIGHT);
 		drawGear(COL[2], COL[1]);
@@ -304,19 +313,34 @@ public:
 		drawCell(SCREEN_WIDTH, ROW[1], sessionBestLiveDeltaSeconds, "sessionBestLiveDeltaSeconds", "Delta", "right", sessionBestLiveDeltaSeconds.indexOf('-') >= 0 ? TFT_GREEN : TFT_RED, 4, forceUpdate);
 		drawCell(SCREEN_WIDTH, ROW[2], sessionBestLiveDeltaProgressSeconds, "sessionBestLiveDeltaProgressSeconds", "Delta P", "right", sessionBestLiveDeltaProgressSeconds.indexOf('-') >= 0 ? TFT_GREEN : TFT_RED, 4, forceUpdate);
 
-		// (TC, ABS, BB)
+		// 油門、煞車、油量
+		const uint16_t throttleColor = isActiveValue(tcActive) ? TFT_RED : TFT_YELLOW;
+		const uint16_t brakeColor = isActiveValue(absActive) ? TFT_RED : TFT_BLUE;
+		const bool fuelAlert = isActiveValue(fuelAlertActive);
+
 		if (isTCCutNull == "False")
-			drawCell(COL[0], ROW[4], tcTcCut, "tcTcCut", "TC TC2", "center", TFT_YELLOW, 4, forceUpdate);
+			drawCell(COL[0], ROW[4], tcTcCut, "tcTcCut", "TC TC2", "center", throttleColor, 4, forceUpdate);
 		else
-			drawCell(COL[0], ROW[4], tcLevel, "tcLevel", "THR", "center", TFT_YELLOW, 4, forceUpdate);
-		drawCell(COL[1], ROW[4], absLevel, "absLevel", "BRK", "center", TFT_BLUE, 4, forceUpdate);
+			drawCell(COL[0], ROW[4], tcLevel, "tcLevel", "THR", "center", throttleColor, 4, forceUpdate);
+
+		drawCell(COL[1], ROW[4], absLevel, "absLevel", "BRK", "center", brakeColor, 4, forceUpdate);
 		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "FUEL", "center", TFT_MAGENTA, 4, forceUpdate);
 
-		// (tyre pressure)
+		// 剩餘圈數、位置、圈數、低油量警示
 		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "R LAP", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[4], ROW[3], tyrePressureFrontRight, "tyrePressureFrontRight", "POS", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[3], ROW[4], tyrePressureRearLeft, "tyrePressureRearLeft", "LAP", "center", TFT_CYAN, 4, forceUpdate);
-		drawCell(COL[4], ROW[4], tyrePressureRearRight, "tyrePressureRearRight", "ABS", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(
+			COL[4],
+			ROW[4],
+			fuelAlert ? "LOW" : "OK",
+			"fuelAlertActive",
+			"FUEL!",
+			"center",
+			fuelAlert ? TFT_RED : TFT_CYAN,
+			4,
+			forceUpdate
+		);
 	}
 
 	void drawColoredButton(int x, int y, int width, int height, String label, uint16_t color)   //disegna i pulsanti della pagina 2
@@ -426,7 +450,7 @@ void drawPage2() // pagina pulsanti
 		bool dataChanged =  (prevData[id] != data) || forceUpdate;
 		bool colorChanged =  (prevColor[id] != color) || forceUpdate;
 
-		if (dataChanged) {
+		if (dataChanged || colorChanged) {
 
 			if (align == "left")
 			{
