@@ -316,7 +316,32 @@ public:
 		// 油門、煞車、油量
 		const uint16_t throttleColor = isActiveValue(tcActive) ? TFT_RED : TFT_YELLOW;
 		const uint16_t brakeColor = isActiveValue(absActive) ? TFT_RED : TFT_BLUE;
-		const bool fuelAlert = isActiveValue(fuelAlertActive);
+		float fuelPercentValue = fuelAlertActive.toFloat();
+
+		// Fuel
+		String fuelStatus;
+		uint16_t fuelStatusColor;
+
+		if (fuelPercentValue > 50.0f)
+		{
+			fuelStatus = "HI";
+			fuelStatusColor = TFT_CYAN;
+		}
+		else if (fuelPercentValue > 25.0f)
+		{
+			fuelStatus = "OK";
+			fuelStatusColor = TFT_CYAN;
+		}
+		else if (fuelPercentValue > 10.0f)
+		{
+			fuelStatus = "LOW";
+			fuelStatusColor = TFT_ORANGE;
+		}
+		else
+		{
+			fuelStatus = "PIT";
+			fuelStatusColor = TFT_RED;
+		}
 
 		if (isTCCutNull == "False")
 			drawCell(COL[0], ROW[4], tcTcCut, "tcTcCut", "TC TC2", "center", throttleColor, 4, forceUpdate);
@@ -327,20 +352,19 @@ public:
 		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "FUEL", "center", TFT_MAGENTA, 4, forceUpdate);
 
 		// 剩餘圈數、位置、圈數、低油量警示
-		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "R LAP", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "F/LAP", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[4], ROW[3], tyrePressureFrontRight, "tyrePressureFrontRight", "POS", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[3], ROW[4], tyrePressureRearLeft, "tyrePressureRearLeft", "LAP", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(
 			COL[4],
 			ROW[4],
-			fuelAlert ? "LOW" : "OK",
-			"fuelAlertActive",
+			fuelStatus,
+			"fuelAlert",
 			"FUEL!",
 			"center",
-			fuelAlert ? TFT_RED : TFT_CYAN,
+			fuelStatusColor,
 			4,
-			forceUpdate
-		);
+			forceUpdate);
 	}
 
 	void drawColoredButton(int x, int y, int width, int height, String label, uint16_t color)   //disegna i pulsanti della pagina 2
