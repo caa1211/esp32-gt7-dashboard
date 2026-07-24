@@ -70,6 +70,19 @@ private:
 
 	int numButtons = 6; // Variabile per il numero di pulsanti
 
+	String gameRunning = "False";
+
+	static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 5UL * 60UL * 1000UL;
+
+	// static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 10000;
+
+	static constexpr uint8_t SCREEN_NORMAL_BRIGHTNESS = 255;
+
+	unsigned long gameStoppedTime = 0;
+
+	bool gameStoppedTimerStarted = false;
+	bool screenSleeping = false;
+
 public:
 	/*
 	CUSTOM PROTOCOL CLASS
@@ -104,7 +117,10 @@ public:
 		tft.setRotation(3);
 		tft.fillScreen(TFT_BLACK);
 
-        bleGamepadConfig.setAutoReport(true);  // in false non invia i comandi a windows
+		screenSleeping = false;
+		gameStoppedTimerStarted = false;
+
+		bleGamepadConfig.setAutoReport(true);  // in false non invia i comandi a windows
         bleGamepadConfig.setAxesMax(32760);
         bleGamepadConfig.setIncludeSlider1(false);
         bleGamepadConfig.setIncludeXAxis(false);
@@ -118,42 +134,134 @@ public:
     // Serial.println("Configurazione BleGamepad completata.");   //x debug
 	}
 
-	// Called when new data is coming from computer
 	void read()
 	{
-		String full = "";
-
+		// 1～9：主要行車及圈速資料
 		speed = FlowSerialReadStringUntil(';').toInt();
 		gear = FlowSerialReadStringUntil(';');
 		rpmPercent = FlowSerialReadStringUntil(';').toInt();
 		rpmRedLineSetting = FlowSerialReadStringUntil(';').toInt();
+
 		currentLapTime = FlowSerialReadStringUntil(';');
 		lastLapTime = FlowSerialReadStringUntil(';');
 		bestLapTime = FlowSerialReadStringUntil(';');
-		sessionBestLiveDeltaSeconds = FlowSerialReadStringUntil(';');
-		sessionBestLiveDeltaProgressSeconds = FlowSerialReadStringUntil(';');
-		tyrePressureFrontLeft  = FlowSerialReadStringUntil(';');
-		tyrePressureFrontRight  = FlowSerialReadStringUntil(';');
-		tyrePressureRearLeft  = FlowSerialReadStringUntil(';');
-		tyrePressureRearRight  = FlowSerialReadStringUntil(';');
-		tcLevel  = FlowSerialReadStringUntil(';');
-		tcActive  = FlowSerialReadStringUntil(';');
-		absLevel  = FlowSerialReadStringUntil(';');
-		absActive  = FlowSerialReadStringUntil(';');
-		isTCCutNull  = FlowSerialReadStringUntil(';');
-		tcTcCut  = FlowSerialReadStringUntil(';');
-		brakeBias  = FlowSerialReadStringUntil(';');
-		brake  = FlowSerialReadStringUntil(';');
-		lapInvalidated  = FlowSerialReadStringUntil(';');
 
-		const String rest = FlowSerialReadStringUntil('\n');
+		sessionBestLiveDeltaSeconds =
+			FlowSerialReadStringUntil(';');
+
+		sessionBestLiveDeltaProgressSeconds =
+			FlowSerialReadStringUntil(';');
+
+		// 10：預估剩餘油量圈數
+		tyrePressureFrontLeft =
+			FlowSerialReadStringUntil(';');
+
+		// 11：起跑位置／排位位置
+		tyrePressureFrontRight =
+			FlowSerialReadStringUntil(';');
+
+		// 12：目前圈數／總圈數，例如 3/10
+		tyrePressureRearLeft =
+			FlowSerialReadStringUntil(';');
+
+		// 13：ABS 是否啟動
+		tyrePressureRearRight =
+			FlowSerialReadStringUntil(';');
+
+		// 14：油門百分比
+		tcLevel =
+			FlowSerialReadStringUntil(';');
+
+		// 15：保留欄位，固定為 0
+		tcActive =
+			FlowSerialReadStringUntil(';');
+
+		// 16：煞車百分比
+		absLevel =
+			FlowSerialReadStringUntil(';');
+
+		// 17：保留欄位，固定為 0
+		absActive =
+			FlowSerialReadStringUntil(';');
+
+		// 18：固定為 True
+		isTCCutNull =
+			FlowSerialReadStringUntil(';');
+
+		// 19：保留欄位，固定為 0
+		tcTcCut =
+			FlowSerialReadStringUntil(';');
+
+		// 20：剩餘油量百分比
+		brakeBias =
+			FlowSerialReadStringUntil(';');
+
+		// 21：保留欄位，固定為 0
+		brake =
+			FlowSerialReadStringUntil(';');
+
+		// 22：本圈是否無效
+		lapInvalidated =
+			FlowSerialReadStringUntil(';');
+
+		// 23：SimHub 是否正在接收遊戲資料
+		gameRunning =
+			FlowSerialReadStringUntil(';');
+
+		// 清除可能存在的空白、\r
+		gameRunning.trim();
+
+		// Protocol 最後一欄也有分號，因此再讀掉封包結尾的換行
+		FlowSerialReadStringUntil('\n');
+
+		const bool isGameRunning =
+			gameRunning == "True" ||
+			gameRunning == "true" ||
+			gameRunning == "TRUE" ||
+			gameRunning == "1";
+
+		if (isGameRunning)
+		{
+			// 遊戲已連線，取消關屏倒數
+			gameStoppedTimerStarted = false;
+
+			// 如果螢幕已休眠，立即恢復背光
+			if (screenSleeping)
+			{
+				screenSleeping = false;
+				tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
+				forceUpdate = true;
+			}
+		}
+		else
+		{
+			// 第一次收到遊戲未連線狀態時，開始倒數
+			if (!gameStoppedTimerStarted)
+			{
+				gameStoppedTimerStarted = true;
+				gameStoppedTime = millis();
+			}
+		}
 	}
 
 	// Called once per arduino loop, timing can't be predicted,
 	// but it's called between each command sent to the arduino
 	void loop()
 	{
-        readTouch(); // Leggi il touchscreen dello schermo
+
+		if (!screenSleeping &&
+			gameStoppedTimerStarted &&
+			millis() - gameStoppedTime >= SCREEN_SLEEP_TIMEOUT)
+		{
+			screenSleeping = true;
+			tft.setBrightness(0);
+		}
+		if (screenSleeping)
+		{
+			return;
+		}
+
+		readTouch(); // Leggi il touchscreen dello schermo
 
         static int lastPage = currentPage;
         if (currentPage != lastPage) {
@@ -202,10 +310,10 @@ public:
 		else
 			drawCell(COL[0], ROW[4], tcLevel, "tcLevel", "THR", "center", TFT_YELLOW, 4, forceUpdate);
 		drawCell(COL[1], ROW[4], absLevel, "absLevel", "BRK", "center", TFT_BLUE, 4, forceUpdate);
-		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "Fuel%", "center", TFT_MAGENTA, 4, forceUpdate);
+		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "FUEL", "center", TFT_MAGENTA, 4, forceUpdate);
 
 		// (tyre pressure)
-		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "RL", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "R LAP", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[4], ROW[3], tyrePressureFrontRight, "tyrePressureFrontRight", "POS", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[3], ROW[4], tyrePressureRearLeft, "tyrePressureRearLeft", "LAP", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[4], ROW[4], tyrePressureRearRight, "tyrePressureRearRight", "ABS", "center", TFT_CYAN, 4, forceUpdate);
