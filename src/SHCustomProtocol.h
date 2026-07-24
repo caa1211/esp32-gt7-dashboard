@@ -6,7 +6,7 @@
 // selezione la configurazione nella cartella lgfx_user
 // #include <LGFX_AUTODETECT.hpp>  // Preparare la classe "LGFX"
 // #include <lgfx_user/LGFX_ESP8266_sample.hpp>
-#include <lgfx_user/LGFX_ESP32_esp32-2432s028.hpp> 
+#include <lgfx_user/LGFX_ESP32_esp32-2432s028.hpp>
 //  dashboard + free deck grafica
 #include <Arduino.h>
 #include <map>
@@ -35,7 +35,7 @@ std::map<String, int32_t> prevColor;
 BleGamepad bleGamepad("ESP32 Touch Gamepad", "YourCompany", 100);
 BleGamepadConfiguration bleGamepadConfig;
 
-int currentPage = 1; // Variabile per tenere traccia della pagina corrente
+int currentPage = 1;	  // Variabile per tenere traccia della pagina corrente
 bool forceUpdate = false; // Variabile per forzare l'aggiornamento delle celle
 
 class SHCustomProtocol
@@ -66,18 +66,22 @@ private:
 	String brakeBias = "0";
 	String brake = "0";
 	String lapInvalidated = "False";
-    uint16_t touchX, touchY;	// definisce i due interi per gestione touchscreen
-    int numButtons = 6; // Variabile per il numero di pulsanti
+	uint16_t touchX, touchY; // definisce i due interi per gestione touchscreen
+	int numButtons = 6;		 // Variabile per il numero di pulsanti
 
 	String gameRunning = "False";
 
 	static constexpr uint8_t FADE_STEP = 5;
-    static constexpr uint8_t FADE_DELAY_MS = 4;
+	static constexpr uint8_t FADE_DELAY_MS = 4;
 	static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 5UL * 60UL * 1000UL;
 	// static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 10000;
 	static constexpr uint8_t SCREEN_NORMAL_BRIGHTNESS = 255;
 	static constexpr bool TOUCH_SCREEN_CONTROL_ENABLED = true;
-	
+
+	// Connecting 畫面動畫設定
+	static constexpr unsigned long CONNECT_ANIMATION_INTERVAL = 1000;
+	static constexpr int CONNECT_DOT_COUNT = 5;
+
 	uint8_t currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
 	unsigned long gameStoppedTime = 0;
 
@@ -92,6 +96,12 @@ private:
 
 	// 避免第一筆資料被誤判為狀態切換
 	bool gameRunningInitialized = false;
+
+	// Connecting 畫面狀態
+	bool connectingScreenActive = false;
+	// int connectingDotIndex = 0;
+	int connectingAnimationStep = 0;
+	unsigned long lastConnectingAnimationTime = 0;
 
 public:
 	/*
@@ -120,30 +130,30 @@ public:
 	// Called when starting the arduino (setup method in main sketch)
 	void setup()
 	{
-	//    Serial.begin(115200);   //x debug
-    //    Serial.println("Test seriale avviato!"); //x debug
-		
+		//    Serial.begin(115200);   //x debug
+		//    Serial.println("Test seriale avviato!"); //x debug
+
 		tft.init();
 
 		tft.setRotation(3);
 		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
-        currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
 		tft.fillScreen(TFT_BLACK);
 		screenSleeping = false;
 		gameStoppedTimerStarted = false;
 
-		bleGamepadConfig.setAutoReport(true);  // in false non invia i comandi a windows
-        bleGamepadConfig.setAxesMax(32760);
-        bleGamepadConfig.setIncludeSlider1(false);
-        bleGamepadConfig.setIncludeXAxis(false);
-        bleGamepadConfig.setIncludeYAxis(false);
-        bleGamepadConfig.setIncludeZAxis(false);
-        bleGamepadConfig.setIncludeRxAxis(false);
-        bleGamepadConfig.setIncludeRyAxis(false);
-        bleGamepadConfig.setIncludeRzAxis(false);
-        bleGamepadConfig.setButtonCount(numButtons);  // Variabile per il numero di pulsanti
-        bleGamepad.begin(&bleGamepadConfig);
-    // Serial.println("Configurazione BleGamepad completata.");   //x debug
+		bleGamepadConfig.setAutoReport(true); // in false non invia i comandi a windows
+		bleGamepadConfig.setAxesMax(32760);
+		bleGamepadConfig.setIncludeSlider1(false);
+		bleGamepadConfig.setIncludeXAxis(false);
+		bleGamepadConfig.setIncludeYAxis(false);
+		bleGamepadConfig.setIncludeZAxis(false);
+		bleGamepadConfig.setIncludeRxAxis(false);
+		bleGamepadConfig.setIncludeRyAxis(false);
+		bleGamepadConfig.setIncludeRzAxis(false);
+		bleGamepadConfig.setButtonCount(numButtons); // Variabile per il numero di pulsanti
+		bleGamepad.begin(&bleGamepadConfig);
+		// Serial.println("Configurazione BleGamepad completata.");   //x debug
 	}
 
 	void read()
@@ -289,63 +299,224 @@ public:
 		previousGameRunning = isGameRunning;
 	}
 
-void loop()
-{
-    /*
-     * GT7 停止五分鐘，自動關閉背光。
-     */
-    if (!screenSleeping &&
-        gameStoppedTimerStarted &&
-        millis() - gameStoppedTime >= SCREEN_SLEEP_TIMEOUT)
-    {
-        screenSleeping = true;
+	void loop()
+	{
+		/*
+		 * GT7 停止五分鐘，自動關閉背光。
+		 */
+		if (!screenSleeping &&
+			gameStoppedTimerStarted &&
+			millis() - gameStoppedTime >= SCREEN_SLEEP_TIMEOUT)
+		{
+			screenSleeping = true;
+			screenOffByUser = false;
+			fadeScreenOff();
+		}
 
-        // 這次是自動關屏，不是使用者長按
-        screenOffByUser = false;
+		// 暗屏時仍需讀取觸控，才能點擊喚醒。
+		readTouch();
 
-        fadeScreenOff();
-    }
+		if (screenSleeping)
+		{
+			return;
+		}
 
-    /*
-     * 必須在休眠 return 之前讀取觸控，
-     * 否則暗屏後無法用觸控喚醒。
-     */
-    readTouch();
+		// 還沒收到 GT7 Telemetry 時顯示等待畫面。
+		if (!previousGameRunning)
+		{
+			updateConnectingScreen();
+			return;
+		}
 
-    if (screenSleeping)
-    {
-        return;
-    }
+		// 從 Connecting 切回主儀表時，完整重畫一次。
+		if (connectingScreenActive)
+		{
+			connectingScreenActive = false;
+			connectingAnimationStep = 0;
 
-    static int lastPage = currentPage;
+			tft.fillScreen(TFT_BLACK);
+			prevData.clear();
+			prevColor.clear();
+			prev_gear = "";
+			prev_rpmPercent = 50;
+			forceUpdate = true;
+		}
 
-    if (currentPage != lastPage)
-    {
-        tft.fillScreen(TFT_BLACK);
+		static int lastPage = currentPage;
 
-        prevData.clear();
-        prevColor.clear();
+		if (currentPage != lastPage)
+		{
+			tft.fillScreen(TFT_BLACK);
+			prevData.clear();
+			prevColor.clear();
+			forceUpdate = true;
+			lastPage = currentPage;
+		}
 
-        forceUpdate = true;
-        lastPage = currentPage;
-    }
+		if (currentPage == 1)
+		{
+			drawPage1(forceUpdate);
+		}
+		else if (forceUpdate)
+		{
+			drawPage2();
+		}
 
-    if (currentPage == 1)
-    {
-        drawPage1(forceUpdate);
-    }
-    else
-    {
-        if (forceUpdate)
-        {
-            drawPage2();
-        }
-    }
-
-    forceUpdate = false;
-}
+		forceUpdate = false;
+	}
 
 	void idle() {}
+
+	void drawConnectingScreenBase()
+{
+    tft.fillScreen(TFT_BLACK);
+
+    tft.setTextPadding(0);
+    tft.setTextDatum(MC_DATUM);
+
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawCentreString(
+        "GT7 DASH",
+        SCREEN_WIDTH / 2,
+        75,
+        4);
+
+    tft.setTextColor(
+        tft.color565(120, 120, 120),
+        TFT_BLACK);
+
+    tft.drawCentreString(
+        "Waiting for Telemetry",
+        SCREEN_WIDTH / 2,
+        120,
+        2);
+
+    const int barWidth = 110;
+    const int barHeight = 3;
+    const int barX = (SCREEN_WIDTH - barWidth) / 2;
+    const int barY = 162;
+
+    tft.fillRect(
+        barX,
+        barY,
+        barWidth,
+        barHeight,
+        tft.color565(28, 28, 28));
+
+    tft.setTextDatum(TL_DATUM);
+}
+
+	void drawConnectingBar()
+	{
+		const int barWidth = 110;
+		const int barHeight = 3;
+
+		const int barX = (SCREEN_WIDTH - barWidth) / 2;
+		const int barY = 162;
+
+		// 每次先重畫整條深灰底
+		tft.fillRect(
+			barX,
+			barY,
+			barWidth,
+			barHeight,
+			tft.color565(28, 28, 28));
+
+		const int highlightWidth = 32;
+
+		// 讓流光可以從左側外面進入，再從右側離開
+		const int travelWidth = barWidth + highlightWidth * 2;
+		const int highlightX =
+			(connectingAnimationStep % travelWidth) - highlightWidth;
+
+		/*
+		 * 將亮區切成多段灰階：
+		 *
+		 * 暗 → 灰 → 亮灰 → 灰 → 暗
+		 *
+		 * 因為高度只有 3px，看起來會像柔和的流光。
+		 */
+		const int segmentCount = 16;
+		const int segmentWidth =
+			(highlightWidth + segmentCount - 1) / segmentCount;
+
+		for (int i = 0; i < segmentCount; i++)
+		{
+			const float position =
+				(float)i / (segmentCount - 1);
+
+			// 三角形亮度，中央最亮、兩側漸暗
+			float brightness =
+				1.0f - fabsf(position * 2.0f - 1.0f);
+
+			// 亮度範圍約 45～190，避免白得太搶眼
+			uint8_t gray =
+				45 + (uint8_t)(brightness * 145);
+
+			int segmentX =
+				barX + highlightX + i * segmentWidth;
+
+			int drawWidth = segmentWidth + 1;
+
+			// 裁切左邊界
+			if (segmentX < barX)
+			{
+				drawWidth -= barX - segmentX;
+				segmentX = barX;
+			}
+
+			// 裁切右邊界
+			if (segmentX + drawWidth > barX + barWidth)
+			{
+				drawWidth =
+					barX + barWidth - segmentX;
+			}
+
+			if (drawWidth > 0)
+			{
+				tft.fillRect(
+					segmentX,
+					barY,
+					drawWidth,
+					barHeight,
+					tft.color565(gray, gray, gray));
+			}
+		}
+	}
+	void updateConnectingScreen()
+	{
+		if (!connectingScreenActive)
+		{
+			tft.fillScreen(TFT_BLACK);
+			drawConnectingScreenBase();
+
+			connectingAnimationStep = 0;
+			lastConnectingAnimationTime = 0;
+			connectingScreenActive = true;
+		}
+
+		const unsigned long now = millis();
+
+		// 數值越大，動畫移動越慢
+		if (now - lastConnectingAnimationTime >= 65)
+		{
+			lastConnectingAnimationTime = now;
+
+			connectingAnimationStep += 2;
+
+			const int highlightWidth = 32;
+			const int barWidth = 110;
+			const int travelWidth =
+				barWidth + highlightWidth * 2;
+
+			if (connectingAnimationStep >= travelWidth)
+			{
+				connectingAnimationStep = 0;
+			}
+
+			drawConnectingBar();
+		}
+	}
 
 	bool isActiveValue(String value)
 	{
@@ -356,14 +527,37 @@ void loop()
 			   value == "1";
 	}
 
-	void drawPage1(bool forceUpdate = false) {
+	void drawPage1(bool forceUpdate = false)
+	{
 		drawRpmMeter(0, 0, SCREEN_WIDTH, HALF_CELL_HEIGHT);
 		drawGear(COL[2], COL[1]);
-				
-		// First+Second Column (Lap times)
-		drawCell(COL[0], ROW[1], bestLapTime, "bestLapTime", "Best Lap", "left", TFT_WHITE, 4, forceUpdate);
-		drawCell(COL[0], ROW[2], lastLapTime, "lastLapTime", "Last Lap", "left", TFT_WHITE, 4, forceUpdate);
-		drawCell(COL[0], ROW[3], currentLapTime, "currenLapTime", "Current Lap", "left", lapInvalidated == "True" ? TFT_RED : TFT_WHITE, 4, forceUpdate);
+
+		drawLapCellSprite(
+			COL[0],
+			ROW[1],
+			bestLapTime,
+			"bestLapTime",
+			"Best Lap",
+			TFT_WHITE,
+			forceUpdate);
+
+		drawLapCellSprite(
+			COL[0],
+			ROW[2],
+			lastLapTime,
+			"lastLapTime",
+			"Last Lap",
+			TFT_WHITE,
+			forceUpdate);
+
+		drawLapCellSprite(
+			COL[0],
+			ROW[3],
+			currentLapTime,
+			"currentLapTime",
+			"Current Lap",
+			lapInvalidated == "True" ? TFT_RED : TFT_WHITE,
+			forceUpdate);
 
 		// Third Column (speed)
 		drawCell(COL[2], ROW[3], speed, "speed", "Speed", "center", TFT_WHITE, 4, forceUpdate);
@@ -426,42 +620,39 @@ void loop()
 			forceUpdate);
 	}
 
-	void drawColoredButton(int x, int y, int width, int height, String label, uint16_t color)   //disegna i pulsanti della pagina 2
+	void drawColoredButton(int x, int y, int width, int height, String label, uint16_t color) // disegna i pulsanti della pagina 2
 	{
-    // Draw the dark background for the button
-    tft.fillRoundRect(x, y, width, height, 10, TFT_BLACK);
+		// Draw the dark background for the button
+		tft.fillRoundRect(x, y, width, height, 10, TFT_BLACK);
 
-    // Draw the top and bottom color edges
-    tft.fillRoundRect(x + 2, y + 14, width - 4, height / 5, 10, color); // Top edge
-    tft.fillRoundRect(x + 2, y + height - height / 5 - 14, width - 4, height / 5, 10, color); // Bottom edge
+		// Draw the top and bottom color edges
+		tft.fillRoundRect(x + 2, y + 14, width - 4, height / 5, 10, color);						  // Top edge
+		tft.fillRoundRect(x + 2, y + height - height / 5 - 14, width - 4, height / 5, 10, color); // Bottom edge
 
-    // Draw the inner color
-    tft.fillRoundRect(x + 2, y + height / 5 + 2, width - 4, height * 3 / 5 - 4, 10, TFT_PURPLE);
+		// Draw the inner color
+		tft.fillRoundRect(x + 2, y + height / 5 + 2, width - 4, height * 3 / 5 - 4, 10, TFT_PURPLE);
 
-    // Draw the label text in white
-    tft.setTextColor(TFT_WHITE, TFT_PURPLE);
-    tft.setTextDatum(MC_DATUM);
-    tft.drawString(label, x + width / 2, y + height / 2);
-    tft.setTextDatum(TL_DATUM);
-}
+		// Draw the label text in white
+		tft.setTextColor(TFT_WHITE, TFT_PURPLE);
+		tft.setTextDatum(MC_DATUM);
+		tft.drawString(label, x + width / 2, y + height / 2);
+		tft.setTextDatum(TL_DATUM);
+	}
 
-void drawPage2() // pagina pulsanti
-{
-    int buttonWidth = SCREEN_WIDTH / 3;
-    int buttonHeight = SCREEN_HEIGHT / 2;
-    String buttonLabels[] = {"In-game", "Offline", "Pit", "TC", "ABS", "Streamig"}; // Sostituisci con le etichette desiderate
-    uint16_t buttonColors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_ORANGE, TFT_PURPLE};
+	void drawPage2() // pagina pulsanti
+	{
+		int buttonWidth = SCREEN_WIDTH / 3;
+		int buttonHeight = SCREEN_HEIGHT / 2;
+		String buttonLabels[] = {"In-game", "Offline", "Pit", "TC", "ABS", "Streamig"}; // Sostituisci con le etichette desiderate
+		uint16_t buttonColors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_ORANGE, TFT_PURPLE};
 
-    for (int i = 0; i < numButtons; i++) {
-        int x = (i % 3) * buttonWidth;
-        int y = (i / 3) * buttonHeight;
-        drawColoredButton(x, y, buttonWidth, buttonHeight, buttonLabels[i], buttonColors[i]);
-    }
-}
-
-
-
-
+		for (int i = 0; i < numButtons; i++)
+		{
+			int x = (i % 3) * buttonWidth;
+			int y = (i / 3) * buttonHeight;
+			drawColoredButton(x, y, buttonWidth, buttonHeight, buttonLabels[i], buttonColors[i]);
+		}
+	}
 
 	void drawGear(int32_t x, int32_t y)
 	{
@@ -517,8 +708,9 @@ void drawPage2() // pagina pulsanti
 		}
 
 		// draw the frame only if it ont there
-		if (prev_rpmPercent == 50) tft.drawRect(x, y, width, height-2, TFT_WHITE);
-		
+		if (prev_rpmPercent == 50)
+			tft.drawRect(x, y, width, height - 2, TFT_WHITE);
+
 		prev_rpmPercent = rpmPercent;
 	}
 
@@ -530,28 +722,35 @@ void drawPage2() // pagina pulsanti
 
 		tft.setTextColor(color, TFT_BLACK);
 
-		bool dataChanged =  (prevData[id] != data) || forceUpdate;
-		bool colorChanged =  (prevColor[id] != color) || forceUpdate;
+		bool dataChanged = (prevData[id] != data) || forceUpdate;
+		bool colorChanged = (prevColor[id] != color) || forceUpdate;
 
-		if (dataChanged || colorChanged) {
+		if (dataChanged || colorChanged)
+		{
 
 			if (align == "left")
 			{
-				
-				if (colorChanged) tft.drawRoundRect(x, y, CELL_WIDTH * 2 - 1, CELL_HEIGHT - 2, 5, color);		// Rectangle
-				if (colorChanged) tft.drawString(name, x + hPadding, y + vPadding, 2);						// Title
+
+				if (colorChanged)
+					tft.drawRoundRect(x, y, CELL_WIDTH * 2 - 1, CELL_HEIGHT - 2, 5, color); // Rectangle
+				if (colorChanged)
+					tft.drawString(name, x + hPadding, y + vPadding, 2);	   // Title
 				tft.drawString(data, x + hPadding, y + titleHeight, fontSize); // Data
 			}
 			else if (align == "right")
 			{
-				if (colorChanged) tft.drawRoundRect(x - (CELL_WIDTH * 2), y, CELL_WIDTH * 2 - 1, CELL_HEIGHT - 2, 5, color); // Rectangle
-				if (colorChanged) tft.drawRightString(name, x - hPadding, y + vPadding, 2);						// Title
-				tft.drawRightString(data, x - hPadding, y + titleHeight, fontSize);	  // Data
+				if (colorChanged)
+					tft.drawRoundRect(x - (CELL_WIDTH * 2), y, CELL_WIDTH * 2 - 1, CELL_HEIGHT - 2, 5, color); // Rectangle
+				if (colorChanged)
+					tft.drawRightString(name, x - hPadding, y + vPadding, 2);		// Title
+				tft.drawRightString(data, x - hPadding, y + titleHeight, fontSize); // Data
 			}
 			else // "center"
 			{
-				if (colorChanged) tft.drawRoundRect(x, y, CELL_WIDTH - 2, CELL_HEIGHT - 2, 5, color);	 // Rectangle
-				if (colorChanged) tft.drawCentreString(name, x + HALF_CELL_WIDTH, y + vPadding, 2);			 // Title
+				if (colorChanged)
+					tft.drawRoundRect(x, y, CELL_WIDTH - 2, CELL_HEIGHT - 2, 5, color); // Rectangle
+				if (colorChanged)
+					tft.drawCentreString(name, x + HALF_CELL_WIDTH, y + vPadding, 2);		// Title
 				tft.drawCentreString(data, x + HALF_CELL_WIDTH, y + titleHeight, fontSize); // Data
 			}
 
@@ -576,89 +775,188 @@ void drawPage2() // pagina pulsanti
 			prevData[id] = data;
 			prevColor[id] = color;
 		}
+	}
 
+	void drawLapCellSprite(
+		int32_t x,
+		int32_t y,
+		const String &data,
+		const String &id,
+		const String &name,
+		uint16_t color,
+		bool forceUpdate = false)
+	{
+		const int cellWidth = CELL_WIDTH * 2 - 1;
+		const int cellHeight = CELL_HEIGHT - 2;
+
+		bool dataChanged =
+			prevData[id] != data || forceUpdate;
+
+		bool colorChanged =
+			prevColor[id] != color || forceUpdate;
+
+		if (!dataChanged && !colorChanged)
+		{
+			return;
+		}
+
+		// 共用一張離屏畫布
+		static LGFX_Sprite sprite(&tft);
+		static bool spriteCreated = false;
+
+		if (!spriteCreated)
+		{
+			sprite.setColorDepth(16);
+			sprite.createSprite(cellWidth, cellHeight);
+			spriteCreated = true;
+		}
+
+		// 所有內容先在記憶體裡畫好
+		sprite.fillSprite(TFT_BLACK);
+
+		sprite.drawRoundRect(
+			0,
+			0,
+			cellWidth,
+			cellHeight,
+			5,
+			color);
+
+		sprite.setTextColor(color, TFT_BLACK);
+		sprite.setTextDatum(TL_DATUM);
+
+		// 標題
+		sprite.drawString(
+			name,
+			5,
+			1,
+			2);
+
+		// 計時數字
+		sprite.drawString(
+			data,
+			5,
+			19,
+			4);
+
+		// 完整畫面一次貼上 TFT
+		sprite.pushSprite(x, y);
+
+		prevData[id] = data;
+		prevColor[id] = color;
 	}
 
 	void drawCell(
 		int32_t x,
 		int32_t y,
-		String data,
-		String id,
-		String name = "Data",
-		String align = "center",
-		int32_t color = TFT_WHITE,
-		int fontSize = 4,
+		const String &data,
+		const String &id,
+		const String &name,
+		const String &align,
+		uint16_t color,
+		uint8_t fontSize,
 		bool forceUpdate = false)
 	{
-		const static int titleHeight = 19;
-		const static int hPadding = 5;
-		const static int vPadding = 1;
+		const bool dataChanged =
+			forceUpdate || prevData[id] != data;
 
-		bool dataChanged =
-			(prevData[id] != data) || forceUpdate;
-
-		bool colorChanged =
-			(prevColor[id] != color) || forceUpdate;
+		const bool colorChanged =
+			forceUpdate || prevColor[id] != color;
 
 		if (!dataChanged && !colorChanged)
-			return;
-
-		/*
-		 * 值有變動時，先用黑色重畫舊文字。
-		 * 不判斷字串長度或實際寬度，避免任何殘影。
-		 */
-		if (dataChanged && prevData[id].length() > 0)
 		{
-			tft.setTextColor(TFT_BLACK, TFT_BLACK);
-
-			if (align == "left")
-			{
-				tft.drawString(
-					prevData[id],
-					x + hPadding,
-					y + titleHeight,
-					fontSize);
-			}
-			else if (align == "right")
-			{
-				tft.drawRightString(
-					prevData[id],
-					x - hPadding,
-					y + titleHeight,
-					fontSize);
-			}
-			else
-			{
-				tft.drawCentreString(
-					prevData[id],
-					x + HALF_CELL_WIDTH,
-					y + titleHeight,
-					fontSize);
-			}
+			return;
 		}
 
-		// 設定新文字顏色
-		tft.setTextColor(color, TFT_BLACK);
+		const int32_t titleHeight = 18;
+		const int32_t hPadding = 5;
 
-		if (align == "left")
+		/*
+		 * 依照原本 Cell 的配置決定可使用的文字寬度。
+		 *
+		 * left / right 通常是跨兩格的大欄位；
+		 * center 通常是單格欄位。
+		 */
+		int32_t textAreaWidth;
+
+		if (align == "left" || align == "right")
 		{
-			if (colorChanged)
+			textAreaWidth = CELL_WIDTH * 2 - hPadding * 2;
+		}
+		else
+		{
+			textAreaWidth = CELL_WIDTH - hPadding * 2;
+		}
+
+		/*
+		 * 邊框與標題只有在強制更新或顏色變動時重畫。
+		 * 數值每次改變時，不需要重畫整個框。
+		 */
+		if (forceUpdate || colorChanged)
+		{
+			if (align == "right")
+			{
+				tft.drawRoundRect(
+					x - CELL_WIDTH * 2 + 1,
+					y,
+					CELL_WIDTH * 2 - 2,
+					CELL_HEIGHT - 1,
+					5,
+					color);
+			}
+			else if (align == "left")
 			{
 				tft.drawRoundRect(
 					x,
 					y,
-					CELL_WIDTH * 2 - 1,
-					CELL_HEIGHT - 2,
+					CELL_WIDTH * 2 - 2,
+					CELL_HEIGHT - 1,
 					5,
 					color);
+			}
+			else
+			{
+				tft.drawRoundRect(
+					x,
+					y,
+					CELL_WIDTH - 1,
+					CELL_HEIGHT - 1,
+					5,
+					color);
+			}
 
+			tft.setTextColor(color, TFT_BLACK);
+			tft.setTextPadding(0);
+
+			if (align == "right")
+			{
+				tft.drawRightString(
+					name,
+					x - hPadding,
+					y + 2,
+					2);
+			}
+			else
+			{
 				tft.drawString(
 					name,
 					x + hPadding,
-					y + vPadding,
+					y + 2,
 					2);
 			}
+		}
 
+		/*
+		 * 不再先把舊文字塗黑。
+		 *
+		 * setTextPadding() 會在畫新文字時，使用背景色補滿指定寬度，
+		 * 所以像 100 變成 99 時，不會留下最後面的 0。
+		 */
+		tft.setTextColor(color, TFT_BLACK);
+		tft.setTextPadding(textAreaWidth);
+
+		if (align == "left")
+		{
 			tft.drawString(
 				data,
 				x + hPadding,
@@ -667,23 +965,6 @@ void drawPage2() // pagina pulsanti
 		}
 		else if (align == "right")
 		{
-			if (colorChanged)
-			{
-				tft.drawRoundRect(
-					x - CELL_WIDTH * 2,
-					y,
-					CELL_WIDTH * 2 - 1,
-					CELL_HEIGHT - 2,
-					5,
-					color);
-
-				tft.drawRightString(
-					name,
-					x - hPadding,
-					y + vPadding,
-					2);
-			}
-
 			tft.drawRightString(
 				data,
 				x - hPadding,
@@ -692,29 +973,18 @@ void drawPage2() // pagina pulsanti
 		}
 		else
 		{
-			if (colorChanged)
-			{
-				tft.drawRoundRect(
-					x,
-					y,
-					CELL_WIDTH - 2,
-					CELL_HEIGHT - 2,
-					5,
-					color);
-
-				tft.drawCentreString(
-					name,
-					x + HALF_CELL_WIDTH,
-					y + vPadding,
-					2);
-			}
-
 			tft.drawCentreString(
 				data,
 				x + HALF_CELL_WIDTH,
 				y + titleHeight,
 				fontSize);
 		}
+
+		/*
+		 * 一定要恢復成 0，否則後面其他 drawString()
+		 * 可能也會被自動補黑背景。
+		 */
+		tft.setTextPadding(0);
 
 		prevData[id] = data;
 		prevColor[id] = color;
