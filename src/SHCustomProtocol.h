@@ -67,19 +67,18 @@ private:
 	String brake = "0";
 	String lapInvalidated = "False";
     uint16_t touchX, touchY;	// definisce i due interi per gestione touchscreen
-
-	int numButtons = 6; // Variabile per il numero di pulsanti
+    int numButtons = 6; // Variabile per il numero di pulsanti
 
 	String gameRunning = "False";
 
+	static constexpr uint8_t FADE_STEP = 5;
+    static constexpr uint8_t FADE_DELAY_MS = 4;
 	static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 5UL * 60UL * 1000UL;
-
 	// static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 10000;
-
 	static constexpr uint8_t SCREEN_NORMAL_BRIGHTNESS = 255;
-
-	static constexpr bool TOUCH_SCREEN_CONTROL_ENABLED = false;
+	static constexpr bool TOUCH_SCREEN_CONTROL_ENABLED = true;
 	
+	uint8_t currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
 	unsigned long gameStoppedTime = 0;
 
 	bool gameStoppedTimerStarted = false;
@@ -125,9 +124,11 @@ public:
     //    Serial.println("Test seriale avviato!"); //x debug
 		
 		tft.init();
-		tft.setRotation(3);
-		tft.fillScreen(TFT_BLACK);
 
+		tft.setRotation(3);
+		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
+        currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+		tft.fillScreen(TFT_BLACK);
 		screenSleeping = false;
 		gameStoppedTimerStarted = false;
 
@@ -258,7 +259,7 @@ public:
 			screenSleeping = false;
 			screenOffByUser = false;
 
-			tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
+			fadeScreenOn();
 
 			forceUpdate = true;
 			gameStoppedTimerStarted = false;
@@ -302,7 +303,7 @@ void loop()
         // 這次是自動關屏，不是使用者長按
         screenOffByUser = false;
 
-        tft.setBrightness(0);
+        fadeScreenOff();
     }
 
     /*
@@ -418,7 +419,7 @@ void loop()
 			ROW[4],
 			fuelStatus,
 			"fuelAlert",
-			"FUEL!",
+			"F/ST",
 			"center",
 			fuelStatusColor,
 			4,
@@ -719,6 +720,53 @@ void drawPage2() // pagina pulsanti
 		prevColor[id] = color;
 	}
 
+	void fadeToBrightness(uint8_t targetBrightness)
+	{
+		if (currentBrightness == targetBrightness)
+			return;
+
+		int brightness = currentBrightness;
+
+		if (brightness < targetBrightness)
+		{
+			while (brightness < targetBrightness)
+			{
+				brightness += FADE_STEP;
+
+				if (brightness > targetBrightness)
+					brightness = targetBrightness;
+
+				tft.setBrightness(brightness);
+				delay(FADE_DELAY_MS);
+			}
+		}
+		else
+		{
+			while (brightness > targetBrightness)
+			{
+				brightness -= FADE_STEP;
+
+				if (brightness < targetBrightness)
+					brightness = targetBrightness;
+
+				tft.setBrightness(brightness);
+				delay(FADE_DELAY_MS);
+			}
+		}
+
+		currentBrightness = targetBrightness;
+	}
+
+	void fadeScreenOn()
+	{
+		fadeToBrightness(SCREEN_NORMAL_BRIGHTNESS);
+	}
+
+	void fadeScreenOff()
+	{
+		fadeToBrightness(0);
+	}
+
 	void readTouch()
 	{
 		/*
@@ -743,13 +791,12 @@ void drawPage2() // pagina pulsanti
 			if (screenSleeping)
 			{
 				/*
-				 * 暗屏時點一下：亮屏
+				 * 暗屏時點一下：淡入亮屏
 				 */
 				screenSleeping = false;
 				screenOffByUser = false;
 
-				tft.setBrightness(
-					SCREEN_NORMAL_BRIGHTNESS);
+				fadeScreenOn();
 
 				forceUpdate = true;
 
@@ -766,12 +813,13 @@ void drawPage2() // pagina pulsanti
 			else
 			{
 				/*
-				 * 亮屏時點一下：手動關屏
+				 * 亮屏時點一下：淡出關屏
 				 */
 				screenOffByUser = true;
 				screenSleeping = true;
 
-				tft.setBrightness(0);
+				fadeScreenOff();
+
 				gameStoppedTimerStarted = false;
 			}
 		}
