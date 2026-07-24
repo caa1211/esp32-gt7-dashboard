@@ -463,7 +463,7 @@ void drawPage2() // pagina pulsanti
 		prev_rpmPercent = rpmPercent;
 	}
 
-	void drawCell(int32_t x, int32_t y, String data, String id, String name = "Data", String align = "center", int32_t color = TFT_WHITE, int fontSize = 4, bool forceUpdate = false)
+	void drawCell2(int32_t x, int32_t y, String data, String id, String name = "Data", String align = "center", int32_t color = TFT_WHITE, int fontSize = 4, bool forceUpdate = false)
 	{
 		const static int titleHeight = 19;
 		const static int hPadding = 5;
@@ -518,6 +518,147 @@ void drawPage2() // pagina pulsanti
 			prevColor[id] = color;
 		}
 
+	}
+
+	void drawCell(
+		int32_t x,
+		int32_t y,
+		String data,
+		String id,
+		String name = "Data",
+		String align = "center",
+		int32_t color = TFT_WHITE,
+		int fontSize = 4,
+		bool forceUpdate = false)
+	{
+		const static int titleHeight = 19;
+		const static int hPadding = 5;
+		const static int vPadding = 1;
+
+		bool dataChanged =
+			(prevData[id] != data) || forceUpdate;
+
+		bool colorChanged =
+			(prevColor[id] != color) || forceUpdate;
+
+		if (!dataChanged && !colorChanged)
+			return;
+
+		/*
+		 * 值有變動時，先用黑色重畫舊文字。
+		 * 不判斷字串長度或實際寬度，避免任何殘影。
+		 */
+		if (dataChanged && prevData[id].length() > 0)
+		{
+			tft.setTextColor(TFT_BLACK, TFT_BLACK);
+
+			if (align == "left")
+			{
+				tft.drawString(
+					prevData[id],
+					x + hPadding,
+					y + titleHeight,
+					fontSize);
+			}
+			else if (align == "right")
+			{
+				tft.drawRightString(
+					prevData[id],
+					x - hPadding,
+					y + titleHeight,
+					fontSize);
+			}
+			else
+			{
+				tft.drawCentreString(
+					prevData[id],
+					x + HALF_CELL_WIDTH,
+					y + titleHeight,
+					fontSize);
+			}
+		}
+
+		// 設定新文字顏色
+		tft.setTextColor(color, TFT_BLACK);
+
+		if (align == "left")
+		{
+			if (colorChanged)
+			{
+				tft.drawRoundRect(
+					x,
+					y,
+					CELL_WIDTH * 2 - 1,
+					CELL_HEIGHT - 2,
+					5,
+					color);
+
+				tft.drawString(
+					name,
+					x + hPadding,
+					y + vPadding,
+					2);
+			}
+
+			tft.drawString(
+				data,
+				x + hPadding,
+				y + titleHeight,
+				fontSize);
+		}
+		else if (align == "right")
+		{
+			if (colorChanged)
+			{
+				tft.drawRoundRect(
+					x - CELL_WIDTH * 2,
+					y,
+					CELL_WIDTH * 2 - 1,
+					CELL_HEIGHT - 2,
+					5,
+					color);
+
+				tft.drawRightString(
+					name,
+					x - hPadding,
+					y + vPadding,
+					2);
+			}
+
+			tft.drawRightString(
+				data,
+				x - hPadding,
+				y + titleHeight,
+				fontSize);
+		}
+		else
+		{
+			if (colorChanged)
+			{
+				tft.drawRoundRect(
+					x,
+					y,
+					CELL_WIDTH - 2,
+					CELL_HEIGHT - 2,
+					5,
+					color);
+
+				tft.drawCentreString(
+					name,
+					x + HALF_CELL_WIDTH,
+					y + vPadding,
+					2);
+			}
+
+			tft.drawCentreString(
+				data,
+				x + HALF_CELL_WIDTH,
+				y + titleHeight,
+				fontSize);
+		}
+
+		prevData[id] = data;
+		prevColor[id] = color;
 	}
 
 	void readTouch()
