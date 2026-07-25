@@ -682,37 +682,85 @@ public:
 	}
 
 	void drawRpmMeter(int32_t x, int32_t y, int width, int height)
+{
+    const int borderSize = 2;
+
+    const int frameHeight = height - 2;
+
+    const int innerX = x + borderSize;
+    const int innerY = y + borderSize;
+
+    const int innerWidth = width - borderSize * 2;
+    const int innerHeight = frameHeight - borderSize * 2;
+
+	int safeRpmPercent = constrain(rpmPercent, 0, 100);
+
+	int meterWidth =
+		(innerWidth * safeRpmPercent) / 100;
+
+	/*
+	 * RPM 下降時，只清除新長度後面的區域。
+	 * 所有座標都要以 innerX 為基準。
+	 */
+	if (prev_rpmPercent > safeRpmPercent)
 	{
-		int meterWidth = (width * rpmPercent) / 100;
+		int clearX = innerX + meterWidth;
+		int clearWidth = innerWidth - meterWidth;
 
-		int yPlusOne = y + 1;
-		int innerWidth = width - meterWidth - 1;
-		int innerHeight = height - 4;
-
-		if (prev_rpmPercent > rpmPercent)
+		if (clearWidth > 0)
 		{
-			tft.fillRect(meterWidth, yPlusOne, innerWidth, innerHeight, TFT_BLACK); // clear the part after the current rect width
+			tft.fillRect(
+				clearX,
+				innerY,
+				clearWidth,
+				innerHeight,
+				TFT_BLACK);
 		}
-
-		if (rpmPercent >= rpmRedLineSetting)
-		{
-			tft.fillRect(x, yPlusOne, meterWidth - 2, innerHeight, TFT_RED);
-		}
-		else if (rpmPercent >= rpmRedLineSetting - 5)
-		{
-			tft.fillRect(x, yPlusOne, meterWidth - 2, innerHeight, TFT_ORANGE);
-		}
-		else
-		{
-			tft.fillRect(x, yPlusOne, meterWidth - 2, innerHeight, TFT_GREEN);
-		}
-
-		// draw the frame only if it ont there
-		if (prev_rpmPercent == 50)
-			tft.drawRect(x, y, width, height - 2, TFT_WHITE);
-
-		prev_rpmPercent = rpmPercent;
 	}
+
+	uint16_t meterColor;
+
+	if (safeRpmPercent >= rpmRedLineSetting)
+	{
+		meterColor = TFT_RED;
+	}
+	else if (safeRpmPercent >= rpmRedLineSetting - 5)
+	{
+		meterColor = TFT_ORANGE;
+	}
+	else
+	{
+		meterColor = TFT_GREEN;
+	}
+
+	/*
+	 * 填色從 innerX 開始，避免蓋到左側白框。
+	 */
+	if (meterWidth > 0)
+	{
+		tft.fillRect(
+			innerX,
+			innerY,
+			meterWidth,
+			innerHeight,
+			meterColor);
+	}
+
+	/*
+	 * 首次繪製或完整重畫時重畫外框。
+	 */
+	if (prev_rpmPercent == 50 || forceUpdate)
+	{
+		tft.drawRect(
+			x,
+			y,
+			width,
+			frameHeight,
+			TFT_WHITE);
+	}
+
+	prev_rpmPercent = safeRpmPercent;
+}
 
 	void drawCell2(int32_t x, int32_t y, String data, String id, String name = "Data", String align = "center", int32_t color = TFT_WHITE, int fontSize = 4, bool forceUpdate = false)
 	{
