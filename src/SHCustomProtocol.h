@@ -105,8 +105,9 @@ private:
 	bool hasReceivedGT7Packet = false;
 	bool gt7CarOnTrack = false;
 
-	// GT7 衍生數據：ABS、剩餘油量圈數，以及之後的 Delta。
+	// GT7 衍生數據：ABS 與剩餘油量圈數。
 	GT7DerivedMetrics derivedMetrics;
+
 #endif
 
 	String formatLapTimeMs(int32_t milliseconds)
@@ -131,6 +132,65 @@ private:
 			static_cast<unsigned long>(millisPart));
 
 		return String(buffer);
+	}
+
+	String formatDeltaSeconds(float value)
+	{
+		if (isnan(value))
+		{
+			return "--";
+		}
+
+		char buffer[16];
+		snprintf(buffer, sizeof(buffer), "%+.3f", value);
+		return String(buffer);
+	}
+
+	String formatLastBestDifference(int32_t lastLapMs, int32_t bestLapMs)
+	{
+		if (lastLapMs <= 0 || bestLapMs <= 0)
+		{
+			return "--";
+		}
+
+		const float differenceSeconds =
+			static_cast<float>(lastLapMs - bestLapMs) / 1000.0f;
+
+		return formatDeltaSeconds(differenceSeconds);
+	}
+
+	int32_t parseLapTimeStringMs(String value)
+	{
+		value.trim();
+
+		if (value.length() == 0 || value.indexOf('-') >= 0)
+		{
+			return -1;
+		}
+
+		const int colon = value.indexOf(':');
+		const int dot = value.lastIndexOf('.');
+
+		if (colon < 0 || dot < colon)
+		{
+			return -1;
+		}
+
+		const int32_t minutes = value.substring(0, colon).toInt();
+		const int32_t seconds = value.substring(colon + 1, dot).toInt();
+		String millisText = value.substring(dot + 1);
+
+		while (millisText.length() < 3)
+		{
+			millisText += "0";
+		}
+
+		if (millisText.length() > 3)
+		{
+			millisText = millisText.substring(0, 3);
+		}
+
+		return minutes * 60000L + seconds * 1000L + millisText.toInt();
 	}
 
 	// Connecting 畫面狀態
@@ -263,14 +323,16 @@ public:
 		lastLapTime = formatLapTimeMs(data.lastLaptime);
 		bestLapTime = formatLapTimeMs(data.bestLaptime);
 
-		// GT7DeltaTracker 目前只有介面骨架，尚未建立參考圈資料。
-		// 在完成真正的位置比對前維持 --，避免顯示假的 0.000。
-		sessionBestLiveDeltaSeconds = "--";
-		sessionBestLiveDeltaProgressSeconds = "--";
-
 		// 圈數
 		const int currentLap = max(0, static_cast<int>(data.lapCount));
 		const int totalLapCount = max(0, static_cast<int>(data.totalLaps));
+
+		// 上一圈與最佳圈的圈速差。新最佳圈會顯示 +0.000。
+		sessionBestLiveDeltaSeconds =
+			formatLastBestDifference(data.lastLaptime, data.bestLaptime);
+
+		// 此欄位不再顯示 Delta P，畫面改為油門／煞車圖條。
+		sessionBestLiveDeltaProgressSeconds = "";
 
 		if (totalLapCount > 0)
 		{
@@ -383,6 +445,11 @@ public:
 
 		sessionBestLiveDeltaProgressSeconds =
 			FlowSerialReadStringUntil(';');
+
+		// Delta 欄改為上一圈－最佳圈；仍讀取舊欄位以維持 Protocol 相容。
+		sessionBestLiveDeltaSeconds = formatLastBestDifference(
+			parseLapTimeStringMs(lastLapTime),
+			parseLapTimeStringMs(bestLapTime));
 
 		// 10：預估剩餘油量圈數
 		tyrePressureFrontLeft =
@@ -841,13 +908,42 @@ public:
 		// Third Column (speed)
 		drawCell(COL[2], ROW[3], speed, "speed", "Speed", "center", TFT_WHITE, 4, forceUpdate);
 
-		// Fourth+Fifth Column (delta)
-		drawCell(SCREEN_WIDTH, ROW[1], sessionBestLiveDeltaSeconds, "sessionBestLiveDeltaSeconds", "Delta", "right", sessionBestLiveDeltaSeconds.indexOf('-') >= 0 ? TFT_GREEN : TFT_RED, 4, forceUpdate);
-		drawCell(SCREEN_WIDTH, ROW[2], sessionBestLiveDeltaProgressSeconds, "sessionBestLiveDeltaProgressSeconds", "Delta P", "right", sessionBestLiveDeltaProgressSeconds.indexOf('-') >= 0 ? TFT_GREEN : TFT_RED, 4, forceUpdate);
+		// 右上：上一圈相對最佳圈的差值。
+		uint16_t lastBestColor = TFT_WHITE;
+		if (sessionBestLiveDeltaSeconds != "--")
+		{
+			lastBestColor = sessionBestLiveDeltaSeconds.startsWith("+") &&
+				sessionBestLiveDeltaSeconds != "+0.000"
+				? TFT_RED
+				: TFT_GREEN;
+		}
 
-		// 油門、煞車、油量
-		const uint16_t throttleColor = isActiveValue(tcActive) ? TFT_RED : TFT_YELLOW;
-		const uint16_t brakeColor = isActiveValue(absActive) ? TFT_RED : TFT_BLUE;
+		drawCell(
+			SCREEN_WIDTH,
+			ROW[1],
+			sessionBestLiveDeltaSeconds,
+			"lastBestDifference",
+			"LAST-BEST",
+			"right",
+			lastBestColor,
+			4,
+			forceUpdate);
+
+		// 右中：油門與煞車改成上下兩個獨立格，整個格子本身就是 progress。
+		drawPedalProgressCells(
+			SCREEN_WIDTH - CELL_WIDTH * 2 + 1,
+			ROW[2],
+			CELL_WIDTH * 2 - 2,
+			CELL_HEIGHT - 1,
+			constrain(tcLevel.toInt(), 0, 100),
+			constrain(absLevel.toInt(), 0, 100),
+			forceUpdate);
+
+		// ABS、TCS 狀態與油量
+		const bool tcsOn = isActiveValue(tcActive);
+		const bool absOn = isActiveValue(absActive);
+		const uint16_t tcsColor = tcsOn ? TFT_YELLOW : TFT_DARKGREY;
+		const uint16_t absColor = absOn ? TFT_RED : TFT_DARKGREY;
 		float fuelPercentValue = fuelAlertActive.toFloat();
 
 		// Fuel
@@ -875,12 +971,28 @@ public:
 			fuelStatusColor = TFT_RED;
 		}
 
-		if (isTCCutNull == "False")
-			drawCell(COL[0], ROW[4], tcTcCut, "tcTcCut", "TC TC2", "center", throttleColor, 4, forceUpdate);
-		else
-			drawCell(COL[0], ROW[4], tcLevel, "tcLevel", "THR", "center", throttleColor, 4, forceUpdate);
+		// 左下兩格：保留 ABS/TCS 標題，使用狀態圓燈取代大型 ON/OFF 文字。
+		drawStatusIndicatorCell(
+			COL[0],
+			ROW[4],
+			CELL_WIDTH,
+			CELL_HEIGHT,
+			"ABS",
+			"absStatus",
+			absOn,
+			TFT_RED,
+			forceUpdate);
 
-		drawCell(COL[1], ROW[4], absLevel, "absLevel", "BRK", "center", brakeColor, 4, forceUpdate);
+		drawStatusIndicatorCell(
+			COL[1],
+			ROW[4],
+			CELL_WIDTH,
+			CELL_HEIGHT,
+			"TCS",
+			"tcsStatus",
+			tcsOn,
+			TFT_RED,
+			forceUpdate);
 		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "FUEL", "center", TFT_MAGENTA, 4, forceUpdate);
 
 		// 剩餘圈數、位置、圈數、低油量警示
@@ -1313,6 +1425,130 @@ public:
 		prevColor[id] = color;
 	}
 
+	void drawStatusIndicatorCell(
+		int32_t x,
+		int32_t y,
+		int32_t width,
+		int32_t height,
+		const String &label,
+		const String &id,
+		bool active,
+		uint16_t activeColor,
+		bool forceUpdate = false)
+	{
+		const String state = active ? "1" : "0";
+		if (!forceUpdate && prevData[id] == state)
+		{
+			return;
+		}
+
+		tft.fillRect(x, y, width, height, TFT_BLACK);
+		tft.drawRoundRect(x, y, width, height, 5, TFT_DARKGREY);
+
+		tft.setTextPadding(0);
+		tft.setTextDatum(TC_DATUM);
+		tft.setTextColor(TFT_WHITE, TFT_BLACK);
+		tft.drawString(label, x + width / 2, y + 3, 2);
+
+		const int32_t radius = 7;
+		const int32_t centerX = x + width / 2;
+		const int32_t centerY = y + 31;
+		const uint16_t lampColor = active ? activeColor : TFT_DARKGREY;
+
+		tft.fillCircle(centerX, centerY, radius, lampColor);
+		tft.drawCircle(centerX, centerY, radius + 1, active ? TFT_WHITE : TFT_DARKGREY);
+
+		// Restore the default text state so later cells are not shifted.
+		tft.setTextDatum(TL_DATUM);
+		tft.setTextPadding(0);
+
+		prevData[id] = state;
+	}
+
+	void drawPedalProgressCells(
+		int32_t x,
+		int32_t y,
+		int32_t totalWidth,
+		int32_t totalHeight,
+		int throttlePercent,
+		int brakePercent,
+		bool forceUpdate = false)
+	{
+		throttlePercent = constrain(throttlePercent, 0, 100);
+		brakePercent = constrain(brakePercent, 0, 100);
+
+		// 上下兩格，而不是左右兩格。
+		const int32_t gap = 2;
+		const int32_t cellHeight = (totalHeight - gap) / 2;
+		const int32_t throttleY = y;
+		const int32_t brakeY = y + cellHeight + gap;
+
+		auto updateOneCell = [&](
+			int32_t cellY,
+			int percent,
+			const char *id,
+			uint16_t color)
+		{
+			const bool firstDraw = prevData.count(id) == 0;
+			const int oldPercent = firstDraw
+				? 0
+				: constrain(prevData[id].toInt(), 0, 100);
+
+			if (!forceUpdate && !firstDraw && oldPercent == percent)
+			{
+				return;
+			}
+
+			// Progress 幾乎填滿整個 cell，只留下 2 px 邊框。
+			const int32_t inset = 2;
+			const int32_t fillX = x + inset;
+			const int32_t fillY = cellY + inset;
+			const int32_t fillWidthMax = totalWidth - inset * 2;
+			const int32_t fillHeight = cellHeight - inset * 2;
+			const int32_t oldFill = fillWidthMax * oldPercent / 100;
+			const int32_t newFill = fillWidthMax * percent / 100;
+
+			// 第一次只建立格子；之後僅更新變動區段，避免閃爍。
+			if (firstDraw || forceUpdate)
+			{
+				tft.fillRect(x, cellY, totalWidth, cellHeight, TFT_BLACK);
+				tft.drawRoundRect(x, cellY, totalWidth, cellHeight, 5, TFT_DARKGREY);
+
+				if (newFill > 0)
+				{
+					tft.fillRect(fillX, fillY, newFill, fillHeight, color);
+				}
+			}
+			else if (newFill > oldFill)
+			{
+				// 增加時只補上新增的區段。
+				tft.fillRect(
+					fillX + oldFill,
+					fillY,
+					newFill - oldFill,
+					fillHeight,
+					color);
+			}
+			else if (newFill < oldFill)
+			{
+				// 減少時只擦掉多出的區段。
+				tft.fillRect(
+					fillX + newFill,
+					fillY,
+					oldFill - newFill,
+					fillHeight,
+					TFT_BLACK);
+			}
+
+			// 保險重畫邊框，避免填色蓋到外框。
+			tft.drawRoundRect(x, cellY, totalWidth, cellHeight, 5, TFT_DARKGREY);
+			prevData[id] = String(percent);
+		};
+
+		updateOneCell(throttleY, throttlePercent, "pedalThrottle", TFT_YELLOW);
+		updateOneCell(brakeY, brakePercent, "pedalBrake", TFT_BLUE);
+	}
+
 	void drawCell(
 		int32_t x,
 		int32_t y,
@@ -1324,6 +1560,10 @@ public:
 		uint8_t fontSize,
 		bool forceUpdate = false)
 	{
+		// Each normal cell sets its own text origin, independent of prior widgets.
+		tft.setTextDatum(TL_DATUM);
+		tft.setTextPadding(0);
+
 		const bool dataChanged =
 			forceUpdate || prevData[id] != data;
 

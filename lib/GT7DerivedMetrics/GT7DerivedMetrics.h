@@ -48,15 +48,48 @@ class GT7DeltaTracker {
 public:
     void reset();
     void beginLap();
-    void sample(float x,float y,float z,uint32_t currentLapMs);
-    void endLap(uint32_t lapTimeMs);
+    void sample(float x, float y, float z, uint32_t lapTime);
+    void endLap(uint32_t lapTime);
 
     float delta() const;
     float deltaP() const;
 
 private:
-    float currentDelta = 0;
-    float projectedDelta = 0;
+    struct DeltaPoint {
+        float x;
+        float y;
+        float z;
+        uint32_t lapTime;
+    };
+
+    static constexpr int MAX_POINTS = 1200;
+    static constexpr int SAMPLE_DIVIDER = 5;
+
+    DeltaPoint reference[MAX_POINTS];
+    DeltaPoint current[MAX_POINTS];
+
+    int referenceCount = 0;
+    int currentCount = 0;
+    int sampleCounter = 0;
+
+    int lastReferenceIndex = 0;
+    int previousReferenceIndex = -1;
+
+    uint32_t bestLapTime = 0;
+
+    float currentDelta = 0.0f;
+    float projectedDelta = 0.0f;
+
+    float previousDelta = 0.0f;
+    float deltaSlope = 0.0f;
+
+    bool deltaValid = false;
+
+    int findNearestReference(float x, float y, float z);
+    static float distanceSquared(
+        float x1, float y1, float z1,
+        float x2, float y2, float z2
+    );
 };
 
 class GT7DerivedMetrics {
