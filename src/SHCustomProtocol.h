@@ -368,43 +368,43 @@ public:
 	void idle() {}
 
 	void drawConnectingScreenBase()
-{
-    tft.fillScreen(TFT_BLACK);
+	{
+		tft.fillScreen(TFT_BLACK);
 
-    tft.setTextPadding(0);
-    tft.setTextDatum(MC_DATUM);
+		tft.setTextPadding(0);
+		tft.setTextDatum(MC_DATUM);
 
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawCentreString(
-        "GT7 DASH",
-        SCREEN_WIDTH / 2,
-        75,
-        4);
+		tft.setTextColor(TFT_WHITE, TFT_BLACK);
+		tft.drawCentreString(
+			"GT7 DASH",
+			SCREEN_WIDTH / 2,
+			75,
+			4);
 
-    tft.setTextColor(
-        tft.color565(120, 120, 120),
-        TFT_BLACK);
+		tft.setTextColor(
+			tft.color565(120, 120, 120),
+			TFT_BLACK);
 
-    tft.drawCentreString(
-        "Waiting for Telemetry",
-        SCREEN_WIDTH / 2,
-        120,
-        2);
+		tft.drawCentreString(
+			"Waiting for Telemetry",
+			SCREEN_WIDTH / 2,
+			120,
+			2);
 
-    const int barWidth = 110;
-    const int barHeight = 3;
-    const int barX = (SCREEN_WIDTH - barWidth) / 2;
-    const int barY = 162;
+		const int barWidth = 110;
+		const int barHeight = 3;
+		const int barX = (SCREEN_WIDTH - barWidth) / 2;
+		const int barY = 162;
 
-    tft.fillRect(
-        barX,
-        barY,
-        barWidth,
-        barHeight,
-        tft.color565(28, 28, 28));
+		tft.fillRect(
+			barX,
+			barY,
+			barWidth,
+			barHeight,
+			tft.color565(28, 28, 28));
 
-    tft.setTextDatum(TL_DATUM);
-}
+		tft.setTextDatum(TL_DATUM);
+	}
 
 	void drawConnectingBar()
 	{
@@ -682,85 +682,225 @@ public:
 	}
 
 	void drawRpmMeter(int32_t x, int32_t y, int width, int height)
-{
-    const int borderSize = 2;
-
-    const int frameHeight = height - 2;
-
-    const int innerX = x + borderSize;
-    const int innerY = y + borderSize;
-
-    const int innerWidth = width - borderSize * 2;
-    const int innerHeight = frameHeight - borderSize * 2;
-
-	int safeRpmPercent = constrain(rpmPercent, 0, 100);
-
-	int meterWidth =
-		(innerWidth * safeRpmPercent) / 100;
-
-	/*
-	 * RPM 下降時，只清除新長度後面的區域。
-	 * 所有座標都要以 innerX 為基準。
-	 */
-	if (prev_rpmPercent > safeRpmPercent)
 	{
-		int clearX = innerX + meterWidth;
-		int clearWidth = innerWidth - meterWidth;
+		const int borderSize = 2;
+		const int frameHeight = height - 2;
 
-		if (clearWidth > 0)
+		const int innerX = x + borderSize;
+		const int innerY = y + borderSize;
+		const int innerWidth = width - borderSize * 2;
+		const int innerHeight = frameHeight - borderSize * 2;
+
+		const int segmentCount = 20;
+		const int segmentGap = 2;
+
+		const int safeRpmPercent =
+			constrain(rpmPercent, 0, 100);
+
+		const int safePrevRpmPercent =
+			constrain(prev_rpmPercent, 0, 100);
+
+		// 目前應亮幾格
+		int activeSegments =
+			(safeRpmPercent * segmentCount + 99) / 100;
+
+		activeSegments =
+			constrain(activeSegments, 0, segmentCount);
+
+		// 上一幀亮幾格
+		int previousActiveSegments =
+			(safePrevRpmPercent * segmentCount + 99) / 100;
+
+		previousActiveSegments =
+			constrain(previousActiveSegments, 0, segmentCount);
+
+		const int totalGapWidth =
+			segmentGap * (segmentCount - 1);
+
+		const int segmentWidth =
+			(innerWidth - totalGapWidth) / segmentCount;
+
+		/*
+		 * 首次繪製或切回主畫面時：
+		 * 清一次內部，再完整畫出目前的 Bar。
+		 */
+		if (forceUpdate)
 		{
 			tft.fillRect(
-				clearX,
+				innerX,
 				innerY,
-				clearWidth,
+				innerWidth,
 				innerHeight,
 				TFT_BLACK);
+
+			previousActiveSegments = 0;
+
+			tft.drawRect(
+				x,
+				y,
+				width,
+				frameHeight,
+				TFT_WHITE);
 		}
+
+		/*
+		 * RPM 上升：
+		 * 只畫新增加的格子。
+		 */
+		if (activeSegments > previousActiveSegments)
+		{
+			for (
+				int i = previousActiveSegments;
+				i < activeSegments;
+				i++)
+			{
+				const int segmentX =
+					innerX +
+					i * (segmentWidth + segmentGap);
+
+				const int segmentPercent =
+					((i + 1) * 100) / segmentCount;
+
+				uint16_t segmentColor;
+
+				if (segmentPercent >= rpmRedLineSetting)
+				{
+					segmentColor = TFT_RED;
+				}
+				else if (
+					segmentPercent >=
+					rpmRedLineSetting - 5)
+				{
+					segmentColor = TFT_ORANGE;
+				}
+				else
+				{
+					segmentColor = TFT_GREEN;
+				}
+
+				tft.fillRect(
+					segmentX,
+					innerY,
+					segmentWidth,
+					innerHeight,
+					segmentColor);
+			}
+		}
+
+		/*
+		 * RPM 下降：
+		 * 只清除消失的格子。
+		 *
+		 * 不清整條，因此不會出現黑一下再重畫。
+		 */
+		else if (activeSegments < previousActiveSegments)
+		{
+			for (
+				int i = activeSegments;
+				i < previousActiveSegments;
+				i++)
+			{
+				const int segmentX =
+					innerX +
+					i * (segmentWidth + segmentGap);
+
+				tft.fillRect(
+					segmentX,
+					innerY,
+					segmentWidth,
+					innerHeight,
+					TFT_BLACK);
+			}
+		}
+
+		/*
+		 * 若 RPM 仍在同一個分段內，不做任何繪圖。
+		 * 例如 51% → 54% 都是同樣格數，畫面完全不更新。
+		 */
+
+		prev_rpmPercent = safeRpmPercent;
 	}
 
-	uint16_t meterColor;
+	void drawRpmMeter2(int32_t x, int32_t y, int width, int height)
+	{
+		const int borderSize = 2;
 
-	if (safeRpmPercent >= rpmRedLineSetting)
-	{
-		meterColor = TFT_RED;
-	}
-	else if (safeRpmPercent >= rpmRedLineSetting - 5)
-	{
-		meterColor = TFT_ORANGE;
-	}
-	else
-	{
-		meterColor = TFT_GREEN;
-	}
+		const int frameHeight = height - 2;
 
-	/*
-	 * 填色從 innerX 開始，避免蓋到左側白框。
-	 */
-	if (meterWidth > 0)
-	{
-		tft.fillRect(
-			innerX,
-			innerY,
-			meterWidth,
-			innerHeight,
-			meterColor);
-	}
+		const int innerX = x + borderSize;
+		const int innerY = y + borderSize;
 
-	/*
-	 * 首次繪製或完整重畫時重畫外框。
-	 */
-	if (prev_rpmPercent == 50 || forceUpdate)
-	{
-		tft.drawRect(
-			x,
-			y,
-			width,
-			frameHeight,
-			TFT_WHITE);
-	}
+		const int innerWidth = width - borderSize * 2;
+		const int innerHeight = frameHeight - borderSize * 2;
 
-	prev_rpmPercent = safeRpmPercent;
-}
+		int safeRpmPercent = constrain(rpmPercent, 0, 100);
+
+		int meterWidth =
+			(innerWidth * safeRpmPercent) / 100;
+
+		/*
+		 * RPM 下降時，只清除新長度後面的區域。
+		 * 所有座標都要以 innerX 為基準。
+		 */
+		if (prev_rpmPercent > safeRpmPercent)
+		{
+			int clearX = innerX + meterWidth;
+			int clearWidth = innerWidth - meterWidth;
+
+			if (clearWidth > 0)
+			{
+				tft.fillRect(
+					clearX,
+					innerY,
+					clearWidth,
+					innerHeight,
+					TFT_BLACK);
+			}
+		}
+
+		uint16_t meterColor;
+
+		if (safeRpmPercent >= rpmRedLineSetting)
+		{
+			meterColor = TFT_RED;
+		}
+		else if (safeRpmPercent >= rpmRedLineSetting - 5)
+		{
+			meterColor = TFT_ORANGE;
+		}
+		else
+		{
+			meterColor = TFT_GREEN;
+		}
+
+		/*
+		 * 填色從 innerX 開始，避免蓋到左側白框。
+		 */
+		if (meterWidth > 0)
+		{
+			tft.fillRect(
+				innerX,
+				innerY,
+				meterWidth,
+				innerHeight,
+				meterColor);
+		}
+
+		/*
+		 * 首次繪製或完整重畫時重畫外框。
+		 */
+		if (prev_rpmPercent == 50 || forceUpdate)
+		{
+			tft.drawRect(
+				x,
+				y,
+				width,
+				frameHeight,
+				TFT_WHITE);
+		}
+
+		prev_rpmPercent = safeRpmPercent;
+	}
 
 	void drawCell2(int32_t x, int32_t y, String data, String id, String name = "Data", String align = "center", int32_t color = TFT_WHITE, int fontSize = 4, bool forceUpdate = false)
 	{
