@@ -1,0 +1,6 @@
+{
+  "name":"GT7DerivedMetrics",
+  "version":"0.1.0",
+  "frameworks":"arduino",
+  "platforms":"espressif32"
+}

@@ -1,5 +1,9 @@
 #include <Arduino.h>
 #include <EspSimHub.h>
+#include <GT7UDPParser.h>
+
+GT7_UDP_Parser gt7Telem;
+Packet gt7Packet;
 
 // No longer have to define whether it's an ESP32 or ESP8266, just do an initial compilation and
 //  VSCode will pick  up the right environment from platformio.ini
@@ -26,6 +30,14 @@ FullLoopbackStream outgoingStream;
 FullLoopbackStream incomingStream;
 
 #endif // INCLUDE_WIFI
+
+
+#define INCLUDE_GT7_WIFI true
+#if INCLUDE_GT7_WIFI
+  #include <WiFi.h>
+  #define GT7_WIFI_SSID "caahome_3fb 2.4G"
+  #define GT7_WIFI_PASSWORD "caacaacaac"
+#endif
 
 #define DEVICE_NAME "HelloWorldEsp" //{"Group":"General","Name":"DEVICE_NAME","Title":"Device name,\r\n make sure to use a unique name when using multiple arduinos","DefaultValue":"SimHub Dash","Type":"string","Template":"#define DEVICE_NAME \"{0}\""}
 
@@ -1128,7 +1140,30 @@ void setup()
 	shFUELPIN.SetValue((int)80);
 #endif
 
-	FlowSerialBegin(19200);
+#if INCLUDE_GT7_WIFI
+    FlowSerialBegin(115200);
+#else
+    FlowSerialBegin(19200);
+#endif
+  delay(1000);
+#if INCLUDE_GT7_WIFI
+    delay(1000);
+	WiFi.mode(WIFI_STA);
+	WiFi.begin(GT7_WIFI_SSID, GT7_WIFI_PASSWORD);
+	Serial.print("Connecting to WiFi");
+	while (WiFi.status() != WL_CONNECTED)
+	{
+		delay(500);
+		Serial.print(".");
+	}
+	Serial.print("ESP32 IP: ");
+	Serial.println(WiFi.localIP());
+
+	IPAddress ps5IP(192, 168, 1, 145);
+	gt7Telem.begin(ps5IP, 'C');
+	Serial.print("PS5 IP: ");
+	Serial.println(ps5IP);
+#endif
 
 #ifdef INCLUDE_GAMEPAD
 	Joystick.begin(false);
@@ -1370,6 +1405,7 @@ unsigned long lastSerialActivity = 0;
 
 
 void loop() {
+
 #if INCLUDE_WIFI
 	ECrowneWifi::loop();
 #endif

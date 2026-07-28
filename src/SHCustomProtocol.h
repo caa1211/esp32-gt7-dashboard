@@ -11,6 +11,7 @@
 #include <Arduino.h>
 #include <map>
 #include <BleGamepad.h> // libreria bluetooth
+#include <GT7DerivedMetrics.h>
 
 static LGFX tft;
 
@@ -97,6 +98,41 @@ private:
 	// 避免第一筆資料被誤判為狀態切換
 	bool gameRunningInitialized = false;
 
+#if INCLUDE_GT7_WIFI
+	// 最近一次真正收到新 GT7 UDP 封包的時間
+	uint32_t lastGT7PacketTime = 0;
+	int32_t lastGT7PacketId = -1;
+	bool hasReceivedGT7Packet = false;
+	bool gt7CarOnTrack = false;
+
+	// GT7 衍生數據：ABS、剩餘油量圈數，以及之後的 Delta。
+	GT7DerivedMetrics derivedMetrics;
+#endif
+
+	String formatLapTimeMs(int32_t milliseconds)
+	{
+		if (milliseconds < 0)
+		{
+			return "--:--.---";
+		}
+
+		const uint32_t value = static_cast<uint32_t>(milliseconds);
+		const uint32_t minutes = value / 60000UL;
+		const uint32_t seconds = (value % 60000UL) / 1000UL;
+		const uint32_t millisPart = value % 1000UL;
+
+		char buffer[16];
+		snprintf(
+			buffer,
+			sizeof(buffer),
+			"%02lu:%02lu.%03lu",
+			static_cast<unsigned long>(minutes),
+			static_cast<unsigned long>(seconds),
+			static_cast<unsigned long>(millisPart));
+
+		return String(buffer);
+	}
+
 	// Connecting 畫面狀態
 	bool connectingScreenActive = false;
 	// int connectingDotIndex = 0;
@@ -141,6 +177,9 @@ public:
 		tft.fillScreen(TFT_BLACK);
 		screenSleeping = false;
 		gameStoppedTimerStarted = false;
+#if INCLUDE_GT7_WIFI
+		derivedMetrics.reset();
+#endif
 
 		bleGamepadConfig.setAutoReport(true); // in false non invia i comandi a windows
 		bleGamepadConfig.setAxesMax(32760);
@@ -156,8 +195,179 @@ public:
 		// Serial.println("Configurazione BleGamepad completata.");   //x debug
 	}
 
+#if INCLUDE_GT7_WIFI
+	bool readGT7Wifi()
+	{
+		gt7Packet = gt7Telem.readData();
+
+		const int32_t packetId =
+			gt7Packet.packetContent.packetId;
+
+		/*
+		 * readData() 沒收到新資料時會保留上一筆 Packet。
+		 * 因此用 packetId 是否改變，判斷這一圈是否真的收到新封包。
+		 */
+		if (hasReceivedGT7Packet && packetId == lastGT7PacketId)
+		{
+			return false;
+		}
+
+		// 尚未收到任何有效資料時，忽略初始化的空 Packet。
+		if (!hasReceivedGT7Packet && packetId == 0 &&
+			gt7Packet.packetContent.magic == 0)
+		{
+			return false;
+		}
+
+		hasReceivedGT7Packet = true;
+		lastGT7PacketId = packetId;
+		lastGT7PacketTime = millis();
+
+		const auto &data = gt7Packet.packetContent;
+
+		// 速度與檔位
+		speed = String(static_cast<int>(data.speed * 3.6f));
+
+		const int currentGear =
+			gt7Telem.getCurrentGearFromByte();
+
+		gear = currentGear == 0
+			? "N"
+			: String(currentGear);
+
+		// RPM Bar
+		const float rpm = data.EngineRPM;
+		const float maxRpm = data.maxAlertRPM;
+		const float redLineRpm = data.minAlertRPM;
+
+		if (maxRpm > 0.0f)
+		{
+			rpmPercent = constrain(
+				static_cast<int>((rpm / maxRpm) * 100.0f),
+				0,
+				100);
+
+			rpmRedLineSetting = constrain(
+				static_cast<int>((redLineRpm / maxRpm) * 100.0f),
+				0,
+				100);
+		}
+		else
+		{
+			rpmPercent = 0;
+			rpmRedLineSetting = 90;
+		}
+
+		// 圈速：currentLap 只有使用 C Packet 時才有值
+		currentLapTime = formatLapTimeMs(data.currentLap);
+		lastLapTime = formatLapTimeMs(data.lastLaptime);
+		bestLapTime = formatLapTimeMs(data.bestLaptime);
+
+		// GT7DeltaTracker 目前只有介面骨架，尚未建立參考圈資料。
+		// 在完成真正的位置比對前維持 --，避免顯示假的 0.000。
+		sessionBestLiveDeltaSeconds = "--";
+		sessionBestLiveDeltaProgressSeconds = "--";
+
+		// 圈數
+		const int currentLap = max(0, static_cast<int>(data.lapCount));
+		const int totalLapCount = max(0, static_cast<int>(data.totalLaps));
+
+		if (totalLapCount > 0)
+		{
+				tyrePressureRearLeft = String(currentLap) + "/" + String(totalLapCount);
+		}
+		else
+		{
+				tyrePressureRearLeft = String(currentLap);
+		}
+
+		// 目前封包只有賽前起跑位置，沒有比賽中的即時排名
+		if (data.RaceStartPosition > 0)
+		{
+				tyrePressureFrontRight = String(data.RaceStartPosition);
+		}
+		else
+		{
+				tyrePressureFrontRight = "--";
+		}
+
+		// 油量百分比
+		float fuelPercent = 0.0f;
+		if (data.fuelCapacity > 0.0f)
+		{
+			fuelPercent = constrain(
+				(data.fuelLevel / data.fuelCapacity) * 100.0f,
+				0.0f,
+				100.0f);
+		}
+
+		brakeBias = String(fuelPercent, 0);
+		fuelAlertActive = String(fuelPercent, 1);
+
+		// 由獨立 library 估算剩餘油量圈數。
+		// 注意：GT7FuelEstimator 接收的是公升，不是百分比。
+		derivedMetrics.fuel.update(
+			data.fuelLevel,
+			currentLap);
+
+		const float estimatedFuelLaps =
+			derivedMetrics.fuel.remainingLaps();
+
+		if (estimatedFuelLaps >= 0.0f)
+		{
+			tyrePressureFrontLeft = String(estimatedFuelLaps, 1);
+		}
+		else
+		{
+			tyrePressureFrontLeft = "--";
+		}
+
+		// 油門、煞車：UDP 範圍 0～255，轉為百分比
+		const int throttlePercent =
+			constrain(static_cast<int>(data.throttle * 100.0f / 255.0f), 0, 100);
+
+		const int brakePercent =
+			constrain(static_cast<int>(data.brake * 100.0f / 255.0f), 0, 100);
+
+		tcLevel = String(throttlePercent);
+		absLevel = String(brakePercent);
+
+		const uint16_t flags = static_cast<uint16_t>(data.flags);
+
+		// GT7 flags bit 0：車輛目前位於賽道／駕駛畫面中。
+		// 回到選單、離開賽道或載入畫面時會變成 false。
+		gt7CarOnTrack = (flags & (1U << 0)) != 0;
+
+		const bool tcsIsActive = (flags & (1U << 11)) != 0;
+
+		tcActive = tcsIsActive ? "True" : "False";
+
+		// GT7 沒有直接提供 ABS Active，使用四輪角速度與實際輪胎半徑估算。
+		derivedMetrics.abs.update(
+			data.speed * 3.6f,
+			static_cast<float>(brakePercent),
+			data.wheelRPS,
+			data.tyreRadius,
+			millis());
+
+		absActive = derivedMetrics.abs.isActive()
+			? "True"
+			: "False";
+
+		isTCCutNull = "True";
+		tcTcCut = "0";
+		brake = "0";
+		lapInvalidated = "False";
+
+		return true;
+	}
+
+#endif
+
 	void read()
 	{
+#if !INCLUDE_GT7_WIFI
+
 		// 1～9：主要行車及圈速資料
 		speed = FlowSerialReadStringUntil(';').toInt();
 		gear = FlowSerialReadStringUntil(';');
@@ -235,7 +445,7 @@ public:
 
 		// Protocol 最後一欄也有分號，因此再讀掉封包結尾的換行
 		FlowSerialReadStringUntil('\n');
-
+#endif
 		const bool isGameRunning =
 			gameRunning == "True" ||
 			gameRunning == "true" ||
@@ -299,8 +509,77 @@ public:
 		previousGameRunning = isGameRunning;
 	}
 
+#if INCLUDE_GT7_WIFI
+	void updateGT7GameState()
+	{
+		const bool telemetryIsAlive =
+			lastGT7PacketTime != 0 &&
+			millis() - lastGT7PacketTime < 3000;
+
+		// 不只要求 UDP 還活著，也要求車輛真的在賽道上。
+		// 因此離開賽道但 GT7 仍持續送封包時，也會切回等待畫面。
+		const bool isGameRunning =
+			telemetryIsAlive && gt7CarOnTrack;
+
+		bool gameJustStarted = false;
+
+		if (gameRunningInitialized)
+		{
+			gameJustStarted =
+				!previousGameRunning &&
+				isGameRunning;
+		}
+		else
+		{
+			gameRunningInitialized = true;
+
+			// 開機時 GT7 已經在執行，也直接亮屏
+			gameJustStarted = isGameRunning;
+		}
+
+		if (gameJustStarted)
+		{
+			screenSleeping = false;
+			screenOffByUser = false;
+
+			fadeScreenOn();
+
+			forceUpdate = true;
+			gameStoppedTimerStarted = false;
+		}
+
+		if (isGameRunning)
+		{
+			gameStoppedTimerStarted = false;
+		}
+		else if (!gameStoppedTimerStarted)
+		{
+			gameStoppedTimerStarted = true;
+			gameStoppedTime = millis();
+		}
+
+		previousGameRunning = isGameRunning;
+	}
+
+#endif
+
 	void loop()
 	{
+#if INCLUDE_GT7_WIFI
+		static uint32_t lastHeartbeatTime = 0;
+		const uint32_t now = millis();
+
+		// GT7 需要持續收到 heartbeat 才會繼續傳送遙測資料。
+		if (now - lastHeartbeatTime >= 500)
+		{
+			lastHeartbeatTime = now;
+			gt7Telem.sendHeartbeat();
+		}
+
+		readGT7Wifi();
+		updateGT7GameState();
+#endif
+
 		/*
 		 * GT7 停止五分鐘，自動關閉背光。
 		 */
@@ -605,7 +884,7 @@ public:
 		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "FUEL", "center", TFT_MAGENTA, 4, forceUpdate);
 
 		// 剩餘圈數、位置、圈數、低油量警示
-		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "F/LAP", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "REM", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[4], ROW[3], tyrePressureFrontRight, "tyrePressureFrontRight", "POS", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(COL[3], ROW[4], tyrePressureRearLeft, "tyrePressureRearLeft", "LAP", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(
