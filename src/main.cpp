@@ -35,8 +35,10 @@ FullLoopbackStream incomingStream;
 #define INCLUDE_GT7_WIFI true
 #if INCLUDE_GT7_WIFI
   #include <WiFi.h>
-  #define GT7_WIFI_SSID "caahome_3fb 2.4G"
-  #define GT7_WIFI_PASSWORD "caacaacaac"
+  #include <WiFiManager.h>
+
+  // WiFiManager captive portal shown only when no saved Wi-Fi can be used.
+  static constexpr const char *GT7_SETUP_AP_NAME = "GT7-DASH-SETUP";
 #endif
 
 #define DEVICE_NAME "HelloWorldEsp" //{"Group":"General","Name":"DEVICE_NAME","Title":"Device name,\r\n make sure to use a unique name when using multiple arduinos","DefaultValue":"SimHub Dash","Type":"string","Template":"#define DEVICE_NAME \"{0}\""}
@@ -1120,6 +1122,8 @@ void buttonMatrixStatusChanged(int buttonId, byte Status) {
 }
 #endif
 
+
+
 void setup()
 {
 #if INCLUDE_WIFI
@@ -1145,25 +1149,7 @@ void setup()
 #else
     FlowSerialBegin(19200);
 #endif
-  delay(1000);
-#if INCLUDE_GT7_WIFI
-    delay(1000);
-	WiFi.mode(WIFI_STA);
-	WiFi.begin(GT7_WIFI_SSID, GT7_WIFI_PASSWORD);
-	Serial.print("Connecting to WiFi");
-	while (WiFi.status() != WL_CONNECTED)
-	{
-		delay(500);
-		Serial.print(".");
-	}
-	Serial.print("ESP32 IP: ");
-	Serial.println(WiFi.localIP());
-
-	IPAddress ps5IP(192, 168, 1, 145);
-	gt7Telem.begin(ps5IP, 'C');
-	Serial.print("PS5 IP: ");
-	Serial.println(ps5IP);
-#endif
+ 
 
 #ifdef INCLUDE_GAMEPAD
 	Joystick.begin(false);
@@ -1328,6 +1314,92 @@ void setup()
 	shCustomProtocol.setup();
 	arqserial.setIdleFunction(idle);
 
+#if INCLUDE_GT7_WIFI
+	delay(1000);
+
+	WiFi.mode(WIFI_STA);
+
+	WiFiManager wifiManager;
+	// for test reset
+	// wifiManager.resetSettings();
+
+	wifiManager.setConnectTimeout(6);
+	wifiManager.setConfigPortalBlocking(true);
+	wifiManager.setClass("invert");
+	wifiManager.setTitle("GT7 DASH SETUP");
+	std::vector<const char *> menu = {
+		"wifi",
+		"restart",
+		"info"
+	};
+	wifiManager.setMenu(menu);
+	Serial.println();
+	Serial.println("Connecting to saved Wi-Fi...");
+	Serial.print("If connection fails, connect your phone to: ");
+	Serial.println(GT7_SETUP_AP_NAME);
+	Serial.println("Then open http://192.168.4.1 if the setup page does not appear automatically.");
+
+	wifiManager.setAPCallback([](WiFiManager *manager)
+							  {
+								  Serial.println("=== WiFi setup portal started ===");
+								  showWifiSetupScreen(); });
+
+	wifiManager.setBreakAfterConfig(true);
+
+	while (WiFi.status() != WL_CONNECTED)
+	{
+		Serial.println("Starting Wi-Fi setup portal...");
+
+		const bool portalResult =
+			wifiManager.autoConnect(GT7_SETUP_AP_NAME);
+
+		Serial.print("autoConnect result: ");
+		Serial.println(portalResult ? "true" : "false");
+
+		Serial.print("WiFi status: ");
+		Serial.println(WiFi.status());
+
+		// 不看 autoConnect() 回傳值，只確認 ESP32 是否真的連上
+		if (WiFi.status() == WL_CONNECTED)
+		{
+			break;
+		}
+
+		Serial.println("Wi-Fi connection failed.");
+		showWifiConnectionFailedScreen();
+
+		delay(100);
+	}
+
+	Serial.println("Wi-Fi connected.");
+	Serial.print("SSID: ");
+	Serial.println(WiFi.SSID());
+	Serial.print("ESP32 IP: ");
+	Serial.println(WiFi.localIP());
+
+	// Phase 1 keeps the existing fixed PS5 IP. Auto discovery comes next.
+	// IPAddress ps5IP(192, 168, 1, 145);
+	// gt7Telem.begin(ps5IP, 'C');
+	// Serial.print("PS5 IP: ");
+	// Serial.println(ps5IP);
+
+	IPAddress gt7BroadcastIP(255, 255, 255, 255);
+
+	gt7Telem.begin(gt7BroadcastIP, 'C');
+
+	Serial.println("GT7 auto discovery enabled");
+	Serial.print("Broadcast address: ");
+	Serial.println(gt7BroadcastIP);
+
+	// 明確停止 WiFiManager portal
+    wifiManager.stopConfigPortal();
+	// 關閉設定用的 SoftAP，只保留 STA
+    WiFi.softAPdisconnect(true);
+	WiFi.mode(WIFI_STA);
+#endif
+
+delay(1000);
+
 #if(GAMEPAD_AXIS_01_ENABLED == 1)
 	SHGAMEPADAXIS01.SetJoystick(&Joystick);
 #endif
@@ -1435,7 +1507,18 @@ void loop() {
 	UpdateGamepadState();
 #endif
 	shCustomProtocol.loop();
+#if INCLUDE_GT7_WIFI
+    if (shCustomProtocol.takeWifiResetRequest())
+    {
+        Serial.println("Clearing saved Wi-Fi settings...");
 
+        WiFiManager wifiManager;
+        wifiManager.resetSettings();
+
+        delay(1000);
+        ESP.restart();
+    }
+#endif
 	// Wait for data
 	if (FlowSerialAvailable() > 0) {
 		if (FlowSerialTimedRead() == MESSAGE_HEADER)

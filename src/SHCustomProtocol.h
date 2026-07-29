@@ -15,6 +15,7 @@
 
 static LGFX tft;
 
+static const int RESET_WAITING_TIME = 3;
 static const int SCREEN_WIDTH = 320;
 static const int SCREEN_HEIGHT = 240;
 static const int X_CENTER = SCREEN_WIDTH / 2;
@@ -35,6 +36,49 @@ std::map<String, int32_t> prevColor;
 
 BleGamepad bleGamepad("ESP32 Touch Gamepad", "YourCompany", 100);
 BleGamepadConfiguration bleGamepadConfig;
+
+static void showWifiConnectionFailedScreen()
+{
+	tft.fillScreen(TFT_BLACK);
+	tft.setTextDatum(MC_DATUM);
+
+	tft.setTextColor(TFT_RED);
+	tft.drawString("WI-FI FAILED", 160, 75);
+
+	tft.setTextColor(TFT_WHITE);
+	tft.drawString("Check your password", 160, 125);
+	tft.drawString("and try again", 160, 155);
+
+	tft.setTextColor(TFT_LIGHTGREY);
+	tft.drawString("Setup portal will restart", 160, 205);
+}
+
+static void showWifiSetupScreen()
+{
+	tft.fillScreen(TFT_BLACK);
+
+	tft.setTextDatum(MC_DATUM);
+
+	tft.setTextColor(TFT_CYAN, TFT_BLACK);
+	tft.setTextSize(2);
+	tft.drawString("WI-FI SETUP", 160, 35);
+
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.setTextSize(1.5);
+	tft.drawString("Connect phone to:", 160, 85);
+
+	tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+	tft.setTextSize(2);
+	tft.drawString("GT7-DASH-SETUP", 160, 120);
+
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.setTextSize(1.5);
+	tft.drawString("Open:", 160, 160);
+
+	tft.setTextColor(TFT_GREEN, TFT_BLACK);
+	tft.setTextSize(2);
+	tft.drawString("192.168.4.1", 160, 195);
+}
 
 int currentPage = 1;	  // Variabile per tenere traccia della pagina corrente
 bool forceUpdate = false; // Variabile per forzare l'aggiornamento delle celle
@@ -89,8 +133,13 @@ private:
 	bool gameStoppedTimerStarted = false;
 	bool screenSleeping = false;
 
-	// 是否由使用者長按手動關閉
+	// 是否由使用者手動關閉
 	bool screenOffByUser = false;
+
+	// 全螢幕長按 5 秒後顯示 Wi-Fi 重設確認畫面
+	static constexpr unsigned long WIFI_RESET_HOLD_MS = 5000UL;
+	bool wifiResetConfirmOpen = false;
+	bool wifiResetRequested = false;
 
 	// 記錄上一筆 GT7 執行狀態，用來偵測 False -> True
 	bool previousGameRunning = false;
@@ -226,32 +275,30 @@ public:
 	// Called when starting the arduino (setup method in main sketch)
 	void setup()
 	{
-		//    Serial.begin(115200);   //x debug
-		//    Serial.println("Test seriale avviato!"); //x debug
-
 		tft.init();
-
 		tft.setRotation(3);
 		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
 		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
 		tft.fillScreen(TFT_BLACK);
 		screenSleeping = false;
+		//    Serial.begin(115200);   //x debug
+		//    Serial.println("Test seriale avviato!"); //x debug
 		gameStoppedTimerStarted = false;
 #if INCLUDE_GT7_WIFI
 		derivedMetrics.reset();
 #endif
 
-		bleGamepadConfig.setAutoReport(true); // in false non invia i comandi a windows
-		bleGamepadConfig.setAxesMax(32760);
-		bleGamepadConfig.setIncludeSlider1(false);
-		bleGamepadConfig.setIncludeXAxis(false);
-		bleGamepadConfig.setIncludeYAxis(false);
-		bleGamepadConfig.setIncludeZAxis(false);
-		bleGamepadConfig.setIncludeRxAxis(false);
-		bleGamepadConfig.setIncludeRyAxis(false);
-		bleGamepadConfig.setIncludeRzAxis(false);
-		bleGamepadConfig.setButtonCount(numButtons); // Variabile per il numero di pulsanti
-		bleGamepad.begin(&bleGamepadConfig);
+		// bleGamepadConfig.setAutoReport(true); // in false non invia i comandi a windows
+		// bleGamepadConfig.setAxesMax(32760);
+		// bleGamepadConfig.setIncludeSlider1(false);
+		// bleGamepadConfig.setIncludeXAxis(false);
+		// bleGamepadConfig.setIncludeYAxis(false);
+		// bleGamepadConfig.setIncludeZAxis(false);
+		// bleGamepadConfig.setIncludeRxAxis(false);
+		// bleGamepadConfig.setIncludeRyAxis(false);
+		// bleGamepadConfig.setIncludeRzAxis(false);
+		// bleGamepadConfig.setButtonCount(numButtons); // Variabile per il numero di pulsanti
+		// bleGamepad.begin(&bleGamepadConfig);
 		// Serial.println("Configurazione BleGamepad completata.");   //x debug
 	}
 
@@ -292,8 +339,8 @@ public:
 			gt7Telem.getCurrentGearFromByte();
 
 		gear = currentGear == 0
-			? "N"
-			: String(currentGear);
+				   ? "N"
+				   : String(currentGear);
 
 		// RPM Bar
 		const float rpm = data.EngineRPM;
@@ -336,21 +383,21 @@ public:
 
 		if (totalLapCount > 0)
 		{
-				tyrePressureRearLeft = String(currentLap) + "/" + String(totalLapCount);
+			tyrePressureRearLeft = String(currentLap) + "/" + String(totalLapCount);
 		}
 		else
 		{
-				tyrePressureRearLeft = String(currentLap);
+			tyrePressureRearLeft = String(currentLap);
 		}
 
 		// 目前封包只有賽前起跑位置，沒有比賽中的即時排名
 		if (data.RaceStartPosition > 0)
 		{
-				tyrePressureFrontRight = String(data.RaceStartPosition);
+			tyrePressureFrontRight = String(data.RaceStartPosition);
 		}
 		else
 		{
-				tyrePressureFrontRight = "--";
+			tyrePressureFrontRight = "--";
 		}
 
 		// 油量百分比
@@ -413,8 +460,8 @@ public:
 			millis());
 
 		absActive = derivedMetrics.abs.isActive()
-			? "True"
-			: "False";
+						? "True"
+						: "False";
 
 		isTCCutNull = "True";
 		tcTcCut = "0";
@@ -581,7 +628,7 @@ public:
 	{
 		const bool telemetryIsAlive =
 			lastGT7PacketTime != 0 &&
-			millis() - lastGT7PacketTime < 3000;
+			millis() - lastGT7PacketTime < RESET_WAITING_TIME * 1000;
 
 		// 不只要求 UDP 還活著，也要求車輛真的在賽道上。
 		// 因此離開賽道但 GT7 仍持續送封包時，也會切回等待畫面。
@@ -659,8 +706,14 @@ public:
 			fadeScreenOff();
 		}
 
-		// 暗屏時仍需讀取觸控，才能點擊喚醒。
+		// 暗屏時仍需讀取觸控，才能點擊喚醒或長按進入 Wi-Fi 重設。
 		readTouch();
+
+		// 確認畫面開啟時，不讓 Dashboard 或 Connecting 畫面蓋回來。
+		if (wifiResetConfirmOpen)
+		{
+			return;
+		}
 
 		if (screenSleeping)
 		{
@@ -749,7 +802,24 @@ public:
 			barHeight,
 			tft.color565(28, 28, 28));
 
-		tft.setTextDatum(TL_DATUM);
+		char text[40];
+		snprintf(
+			text,
+			sizeof(text),
+			"Touch & hold %ds to change WiFi",
+			RESET_WAITING_TIME);
+
+		tft.drawCentreString(
+			text,
+			SCREEN_WIDTH / 2,
+			SCREEN_HEIGHT - 26,
+			1);
+
+		tft.drawCentreString(
+			"v1.2.0  |  by caa1211",
+			SCREEN_WIDTH / 2,
+			SCREEN_HEIGHT - 12,
+			1);
 	}
 
 	void drawConnectingBar()
@@ -913,9 +983,9 @@ public:
 		if (sessionBestLiveDeltaSeconds != "--")
 		{
 			lastBestColor = sessionBestLiveDeltaSeconds.startsWith("+") &&
-				sessionBestLiveDeltaSeconds != "+0.000"
-				? TFT_RED
-				: TFT_GREEN;
+									sessionBestLiveDeltaSeconds != "+0.000"
+								? TFT_RED
+								: TFT_GREEN;
 		}
 
 		drawCell(
@@ -1484,15 +1554,15 @@ public:
 		const int32_t brakeY = y + cellHeight + gap;
 
 		auto updateOneCell = [&](
-			int32_t cellY,
-			int percent,
-			const char *id,
-			uint16_t color)
+								 int32_t cellY,
+								 int percent,
+								 const char *id,
+								 uint16_t color)
 		{
 			const bool firstDraw = prevData.count(id) == 0;
 			const int oldPercent = firstDraw
-				? 0
-				: constrain(prevData[id].toInt(), 0, 100);
+									   ? 0
+									   : constrain(prevData[id].toInt(), 0, 100);
 
 			if (!forceUpdate && !firstDraw && oldPercent == percent)
 			{
@@ -1744,37 +1814,174 @@ public:
 		fadeToBrightness(0);
 	}
 
+	void redrawAfterWifiResetDialog()
+	{
+		tft.fillScreen(TFT_BLACK);
+		prevData.clear();
+		prevColor.clear();
+		prev_gear = "";
+		prev_rpmPercent = 50;
+		connectingScreenActive = false;
+		connectingAnimationStep = 0;
+		forceUpdate = true;
+	}
+
+	void showWifiResetConfirm()
+	{
+		// 即使原本處於暗屏，也要先亮起確認畫面。
+		screenSleeping = false;
+		screenOffByUser = false;
+		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
+		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+
+		tft.fillScreen(TFT_BLACK);
+		tft.setTextPadding(0);
+		tft.setTextDatum(MC_DATUM);
+
+		tft.setTextColor(TFT_WHITE, TFT_BLACK);
+		tft.drawString("Reset saved Wi-Fi?", SCREEN_WIDTH / 2, 60, 4);
+
+		tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+		tft.drawString("Device will restart", SCREEN_WIDTH / 2, 95, 2);
+
+		const int buttonY = 135;
+		const int buttonHeight = 62;
+		const int buttonWidth = 120;
+		const int noX = 25;
+		const int yesX = SCREEN_WIDTH - 25 - buttonWidth;
+
+		tft.fillRoundRect(noX, buttonY, buttonWidth, buttonHeight, 8, TFT_DARKGREY);
+		tft.drawRoundRect(noX, buttonY, buttonWidth, buttonHeight, 8, TFT_WHITE);
+		tft.setTextColor(TFT_WHITE, TFT_DARKGREY);
+		tft.drawString("NO", noX + buttonWidth / 2, buttonY + buttonHeight / 2, 4);
+
+		tft.fillRoundRect(yesX, buttonY, buttonWidth, buttonHeight, 8, TFT_RED);
+		tft.drawRoundRect(yesX, buttonY, buttonWidth, buttonHeight, 8, TFT_WHITE);
+		tft.setTextColor(TFT_WHITE, TFT_RED);
+		tft.drawString("YES", yesX + buttonWidth / 2, buttonY + buttonHeight / 2, 4);
+
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	void showWifiResettingScreen()
+	{
+		tft.fillScreen(TFT_BLACK);
+		tft.setTextPadding(0);
+		tft.setTextDatum(MC_DATUM);
+
+		tft.setTextColor(TFT_CYAN, TFT_BLACK);
+		tft.drawString("WI-FI RESET", SCREEN_WIDTH / 2, 90, 4);
+
+		tft.setTextColor(TFT_WHITE, TFT_BLACK);
+		tft.drawString("Restarting...", SCREEN_WIDTH / 2, 145, 2);
+
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	bool takeWifiResetRequest()
+	{
+		if (!wifiResetRequested)
+		{
+			return false;
+		}
+
+		wifiResetRequested = false;
+		return true;
+	}
+
 	void readTouch()
 	{
-		/*
-		 * 整體關閉觸控開關屏功能時，
-		 * 不讀取觸控，也不做任何亮屏或關屏動作。
-		 */
 		if (!TOUCH_SCREEN_CONTROL_ENABLED)
 		{
 			return;
 		}
 
 		static bool wasTouched = false;
+		static bool longPressTriggered = false;
+		static bool waitForReleaseAfterDialog = false;
+		static unsigned long touchStartTime = 0;
 
-		const bool isTouched =
-			tft.getTouch(&touchX, &touchY);
+		const bool isTouched = tft.getTouch(&touchX, &touchY);
 
-		/*
-		 * 只處理手指剛碰到螢幕的瞬間。
-		 */
+		// 長按開啟確認畫面後，必須先放開，避免同一次觸控誤按 YES／NO。
+		if (waitForReleaseAfterDialog)
+		{
+			if (!isTouched)
+			{
+				waitForReleaseAfterDialog = false;
+				wasTouched = false;
+			}
+			return;
+		}
+
+		// 確認畫面中的按鈕處理。
+		if (wifiResetConfirmOpen)
+		{
+			if (isTouched && !wasTouched)
+			{
+				touchStartTime = millis();
+			}
+
+			if (!isTouched && wasTouched)
+			{
+				const int buttonY = 135;
+				const int buttonHeight = 62;
+				const int buttonWidth = 120;
+				const int noX = 25;
+				const int yesX = SCREEN_WIDTH - 25 - buttonWidth;
+
+				const bool noPressed =
+					touchX >= noX && touchX < noX + buttonWidth &&
+					touchY >= buttonY && touchY < buttonY + buttonHeight;
+
+				const bool yesPressed =
+					touchX >= yesX && touchX < yesX + buttonWidth &&
+					touchY >= buttonY && touchY < buttonY + buttonHeight;
+
+				if (yesPressed)
+				{
+					showWifiResettingScreen();
+					wifiResetRequested = true;
+				}
+				else if (noPressed)
+				{
+					wifiResetConfirmOpen = false;
+					redrawAfterWifiResetDialog();
+				}
+			}
+
+			wasTouched = isTouched;
+			return;
+		}
+
+		// 手指剛碰到螢幕：開始計算長按時間。
 		if (isTouched && !wasTouched)
+		{
+			touchStartTime = millis();
+			longPressTriggered = false;
+		}
+
+		// 全螢幕持續按住 6 秒：顯示 Wi-Fi 重設確認畫面。
+		if (isTouched &&
+			!longPressTriggered &&
+			millis() - touchStartTime >= WIFI_RESET_HOLD_MS)
+		{
+			longPressTriggered = true;
+			wifiResetConfirmOpen = true;
+			showWifiResetConfirm();
+			waitForReleaseAfterDialog = true;
+			wasTouched = isTouched;
+			return;
+		}
+
+		// 未達 6 秒便放開：維持原本的短按亮屏／熄屏功能。
+		if (!isTouched && wasTouched && !longPressTriggered)
 		{
 			if (screenSleeping)
 			{
-				/*
-				 * 暗屏時點一下：淡入亮屏
-				 */
 				screenSleeping = false;
 				screenOffByUser = false;
-
 				fadeScreenOn();
-
 				forceUpdate = true;
 
 				if (!previousGameRunning)
@@ -1789,14 +1996,9 @@ public:
 			}
 			else
 			{
-				/*
-				 * 亮屏時點一下：淡出關屏
-				 */
 				screenOffByUser = true;
 				screenSleeping = true;
-
 				fadeScreenOff();
-
 				gameStoppedTimerStarted = false;
 			}
 		}
