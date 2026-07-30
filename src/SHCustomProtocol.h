@@ -993,7 +993,7 @@ public:
 			ROW[1],
 			sessionBestLiveDeltaSeconds,
 			"lastBestDifference",
-			"LAST-BEST",
+			"DELTA",
 			"right",
 			lastBestColor,
 			4,
