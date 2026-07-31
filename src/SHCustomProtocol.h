@@ -96,7 +96,7 @@ private:
 	String currentLapTime = "00:00.00";
 	String lastLapTime = "00:00.00";
 	String bestLapTime = "00.00.00";
-	String sessionBestLiveDeltaSeconds = "0.000";
+	String sessionBestLiveDeltaSeconds = "+0.000";
 	String sessionBestLiveDeltaProgressSeconds = "0.00";
 	String tyrePressureFrontLeft = "00.0";
 	String tyrePressureFrontRight = "00.0";
@@ -187,7 +187,7 @@ private:
 	{
 		if (isnan(value))
 		{
-			return "--";
+			return "+0.000";
 		}
 
 		char buffer[16];
@@ -199,7 +199,7 @@ private:
 	{
 		if (lastLapMs <= 0 || bestLapMs <= 0)
 		{
-			return "--";
+			return "+0.000";
 		}
 
 		const float differenceSeconds =
@@ -376,7 +376,9 @@ public:
 
 		// 上一圈與最佳圈的圈速差。新最佳圈會顯示 +0.000。
 		sessionBestLiveDeltaSeconds =
-			formatLastBestDifference(data.lastLaptime, data.bestLaptime);
+			updateLastBestDifference(
+				data.lastLaptime,
+				data.bestLaptime);
 
 		// 此欄位不再顯示 Delta P，畫面改為油門／煞車圖條。
 		sessionBestLiveDeltaProgressSeconds = "";
@@ -816,7 +818,7 @@ public:
 			1);
 
 		tft.drawCentreString(
-			"v1.2.0  |  by caa1211",
+			"v1.2.1  |  by caa1211",
 			SCREEN_WIDTH / 2,
 			SCREEN_HEIGHT - 12,
 			1);
@@ -943,6 +945,40 @@ public:
 			   value == "1";
 	}
 
+	int32_t previousBestLapMs = -1;
+	int32_t lastProcessedLapMs = -1;
+
+	String updateLastBestDifference(
+		int32_t lastLapMs,
+		int32_t bestLapMs)
+	{
+		if (lastLapMs <= 0 || bestLapMs <= 0)
+		{
+			return "+0.000";
+		}
+
+		// 同一個上一圈可能每個封包重複傳送，只處理一次。
+		if (lastLapMs == lastProcessedLapMs)
+		{
+			return sessionBestLiveDeltaSeconds;
+		}
+
+		lastProcessedLapMs = lastLapMs;
+
+		String result = "+0.000";
+
+		if (previousBestLapMs > 0)
+		{
+			result = formatDeltaSeconds(
+				static_cast<float>(lastLapMs - previousBestLapMs) / 1000.0f);
+		}
+
+		// 本圈處理完後，才更新保存的最佳圈。
+		previousBestLapMs = bestLapMs;
+
+		return result;
+	}
+
 	void drawPage1(bool forceUpdate = false)
 	{
 		drawRpmMeter(0, 0, SCREEN_WIDTH, HALF_CELL_HEIGHT);
@@ -980,14 +1016,16 @@ public:
 
 		// 右上：上一圈相對最佳圈的差值。
 		uint16_t lastBestColor = TFT_WHITE;
-		if (sessionBestLiveDeltaSeconds != "--")
+		if (sessionBestLiveDeltaSeconds.startsWith("-"))
 		{
-			lastBestColor = sessionBestLiveDeltaSeconds.startsWith("+") &&
-									sessionBestLiveDeltaSeconds != "+0.000"
-								? TFT_RED
-								: TFT_GREEN;
+			lastBestColor = TFT_GREEN;
 		}
-
+		else if (
+			sessionBestLiveDeltaSeconds.startsWith("+") &&
+			sessionBestLiveDeltaSeconds != "+0.000")
+		{
+			lastBestColor = TFT_RED;
+		}
 		drawCell(
 			SCREEN_WIDTH,
 			ROW[1],
@@ -1035,10 +1073,15 @@ public:
 			fuelStatus = "LOW";
 			fuelStatusColor = TFT_ORANGE;
 		}
-		else
+		else if (fuelPercentValue > 0.0f)
 		{
 			fuelStatus = "PIT";
 			fuelStatusColor = TFT_RED;
+		}
+		else
+		{
+			fuelStatus = "--";
+			fuelStatusColor = TFT_DARKGREY;
 		}
 
 		// 左下兩格：保留 ABS/TCS 標題，使用狀態圓燈取代大型 ON/OFF 文字。
