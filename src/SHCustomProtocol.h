@@ -15,6 +15,7 @@
 
 static LGFX tft;
 
+static String GT7_DASH_VERSION = "1.2.2";
 static const int RESET_WAITING_TIME = 3;
 static const int SCREEN_WIDTH = 320;
 static const int SCREEN_HEIGHT = 240;
@@ -158,6 +159,13 @@ private:
 	GT7DerivedMetrics derivedMetrics;
 
 #endif
+
+	void resetLapDifference()
+	{
+		previousBestLapMs = -1;
+		lastProcessedLapMs = -1;
+		sessionBestLiveDeltaSeconds = "+0.000";
+	}
 
 	String formatLapTimeMs(int32_t milliseconds)
 	{
@@ -592,6 +600,8 @@ public:
 		 */
 		if (gameJustStarted)
 		{
+            resetLapDifference();
+
 			screenSleeping = false;
 			screenOffByUser = false;
 
@@ -655,6 +665,7 @@ public:
 
 		if (gameJustStarted)
 		{
+            resetLapDifference();
 			screenSleeping = false;
 			screenOffByUser = false;
 
@@ -684,7 +695,6 @@ public:
 #if INCLUDE_GT7_WIFI
 		static uint32_t lastHeartbeatTime = 0;
 		const uint32_t now = millis();
-
 		// GT7 需要持續收到 heartbeat 才會繼續傳送遙測資料。
 		if (now - lastHeartbeatTime >= 500)
 		{
@@ -818,7 +828,7 @@ public:
 			1);
 
 		tft.drawCentreString(
-			"v1.2.1  |  by caa1211",
+			"v" + GT7_DASH_VERSION + "  |  by caa1211",
 			SCREEN_WIDTH / 2,
 			SCREEN_HEIGHT - 12,
 			1);
