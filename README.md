@@ -1,13 +1,13 @@
 
 # ESP32 GT7 Dashboard
 
+A standalone **Gran Turismo 7 dashboard** running entirely on an ESP32.
+No SimHub • No PC • Auto PS5 Discovery
+
 <p align="center">
   <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
 </p>
 
-A standalone **Gran Turismo 7 dashboard** running entirely on an ESP32.
-
-**No SimHub. No PC.**
 
 Simply connect your ESP32 to the same Wi-Fi network as your PS5 and enjoy real-time telemetry directly from Gran Turismo 7.
 
@@ -142,12 +142,6 @@ To reduce power consumption and extend display life:
 
 ---
 
-## Screenshots
-
-Coming soon.
-
----
-
 ## Roadmap
 
 - [x] Direct GT7 telemetry
@@ -214,6 +208,13 @@ Used as a reference implementation for parsing Gran Turismo 7 UDP telemetry pack
 https://github.com/tzapu/WiFiManager
 
 Provides the Wi-Fi configuration portal and captive portal functionality.
+
+### 3D Printed Case for ESP32 CYD
+
+A slim, minimalist enclosure designed specifically for the **ESP32-2432S028 (2.8" CYD)** is available on MakerWorld.
+
+https://makerworld.com/zh/models/2171220-slim-minimal-case-for-esp32-cyd-2-4-2-8#profileId-2354976
+
 
 Many thanks to all of the authors and contributors who made these projects available to the community.
 
