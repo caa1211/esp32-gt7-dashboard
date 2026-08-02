@@ -1,0 +1,7 @@
+
+
+{
+  "scripts": {
+    "publish:firmware": "node scripts/publish-firmware.mjs"
+  }
+}

@@ -76,6 +76,9 @@
 
 👉 **https://caa1211.github.io/esp32-gt7-dashboard/**
 
+網頁安裝程式支援本專案所設定的傳統 ESP32 目標。韌體維護者可參閱
+[docs/RELEASING.md](docs/RELEASING.md)，了解本機編譯、二進位檔案放置、燒錄位址及發佈流程。
+
 ---
 
 ## 快速開始

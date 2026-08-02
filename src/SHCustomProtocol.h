@@ -12,10 +12,10 @@
 #include <map>
 #include <BleGamepad.h> // libreria bluetooth
 #include <GT7DerivedMetrics.h>
+#include "version.h"
 
 static LGFX tft;
 
-static String GT7_DASH_VERSION = "1.2.2";
 static const int RESET_WAITING_TIME = 3;
 static const int SCREEN_WIDTH = 320;
 static const int SCREEN_HEIGHT = 240;
@@ -828,7 +828,7 @@ public:
 			1);
 
 		tft.drawCentreString(
-			"v" + GT7_DASH_VERSION + "  |  by caa1211",
+			String("v") + GT7_DASH_VERSION + "  |  by caa1211",
 			SCREEN_WIDTH / 2,
 			SCREEN_HEIGHT - 12,
 			1);

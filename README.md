@@ -75,6 +75,10 @@ No development tools are required.
 
 👉 **https://caa1211.github.io/esp32-gt7-dashboard/**
 
+The browser installer supports the classic ESP32 target configured by this repository.
+Firmware maintainers can find the local build, binary staging, flash-offset, and publishing
+procedure in [docs/RELEASING.md](docs/RELEASING.md).
+
 ---
 
 ## Quick Start
