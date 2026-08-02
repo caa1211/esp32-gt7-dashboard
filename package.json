@@ -2,6 +2,6 @@
 
 {
   "scripts": {
-    "publish:firmware": "node scripts/publish-firmware.mjs"
+    "publish": "node scripts/publish-firmware.mjs"
   }
 }

@@ -79,6 +79,14 @@ static void showWifiSetupScreen()
 	tft.setTextColor(TFT_GREEN, TFT_BLACK);
 	tft.setTextSize(2);
 	tft.drawString("192.168.4.1", 160, 195);
+
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.setTextSize(1);
+	tft.drawCentreString(
+		String("v") + GT7_DASH_VERSION,
+		SCREEN_WIDTH / 2,
+		SCREEN_HEIGHT - 12,
+		1);
 }
 
 int currentPage = 1;	  // Variabile per tenere traccia della pagina corrente
