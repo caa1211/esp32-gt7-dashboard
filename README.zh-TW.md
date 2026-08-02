@@ -1,4 +1,4 @@
-# ESP32 GT7 Dashboard
+# ESP32 GT7 Dashboard ([線上安裝](https://caa1211.github.io/esp32-gt7-dashboard/))
 
 一個專為 **Gran Turismo 7** 打造、完全運行於 **ESP32** 的獨立儀表板。
 

@@ -1,0 +1,123 @@
+name: Deploy Web Installer to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "installer/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Validate committed installer
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { readFile, stat } = require("node:fs/promises");
+          const { isAbsolute, relative, resolve, sep } = require("node:path");
+
+          const installerRoot = resolve("installer");
+          const indexPath = resolve(installerRoot, "index.html");
+          const manifestPath = resolve(installerRoot, "manifest.json");
+
+          async function requireNonEmptyFile(filePath, label) {
+            let details;
+            try {
+              details = await stat(filePath);
+            } catch (error) {
+              if (error.code === "ENOENT") {
+                throw new Error(`${label} is missing: ${relative(process.cwd(), filePath)}`);
+              }
+              throw error;
+            }
+
+            if (!details.isFile()) {
+              throw new Error(`${label} is not a file: ${relative(process.cwd(), filePath)}`);
+            }
+            if (details.size === 0) {
+              throw new Error(`${label} is empty: ${relative(process.cwd(), filePath)}`);
+            }
+          }
+
+          function installerPath(manifestPartPath) {
+            if (typeof manifestPartPath !== "string" || manifestPartPath.length === 0) {
+              throw new Error("Every manifest part must have a non-empty string path.");
+            }
+
+            const resolvedPath = resolve(installerRoot, manifestPartPath);
+            const relativePath = relative(installerRoot, resolvedPath);
+            if (
+              isAbsolute(relativePath) ||
+              relativePath === ".." ||
+              relativePath.startsWith(`..${sep}`)
+            ) {
+              throw new Error(`Manifest binary path resolves outside installer/: ${manifestPartPath}`);
+            }
+            return resolvedPath;
+          }
+
+          async function main() {
+            await requireNonEmptyFile(indexPath, "Installer index");
+            await requireNonEmptyFile(manifestPath, "Installer manifest");
+
+            let manifest;
+            try {
+              manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+            } catch (error) {
+              throw new Error(`Unable to parse installer/manifest.json: ${error.message}`);
+            }
+
+            const parts = Array.isArray(manifest.builds)
+              ? manifest.builds.flatMap((build) =>
+                  Array.isArray(build?.parts) ? build.parts : [],
+                )
+              : [];
+
+            if (parts.length === 0) {
+              throw new Error("installer/manifest.json does not reference any binaries.");
+            }
+
+            for (const part of parts) {
+              const binaryPath = installerPath(part?.path);
+              await requireNonEmptyFile(binaryPath, `Manifest binary "${part.path}"`);
+            }
+
+            console.log(`Validated installer and ${parts.length} manifest-referenced binaries.`);
+          }
+
+          main().catch((error) => {
+            console.error(`Installer validation failed: ${error.message}`);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Upload installer site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: installer
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -112,3 +112,52 @@ commit the four binaries together with any intentional manifest version change.
 
 The Pages workflow is intentionally path-filtered and uploads only `installer/`; source code,
 documentation, `.pio/`, and local build tooling are not included in the published artifact.
+
+## Release and GitHub Pages deployment checklist
+
+Use this sequence for every public firmware release:
+
+1. Publish the firmware locally with the intended numeric version:
+
+   ```bash
+   npm run publish:firmware -- 1.2.3
+   ```
+
+   This runs `scripts/publish-firmware.mjs`; it synchronizes the version, builds with the
+   local PlatformIO installation, copies the required binaries into `installer/firmware/`,
+   and validates the installer files.
+2. Flash and test the generated firmware on a physical ESP32-2432S028.
+3. Serve the local installer without caching:
+
+   ```bash
+   http-server installer -p 8080 -c-1
+   ```
+
+4. Open <http://localhost:8080> in a Web Serial-compatible desktop browser.
+5. Confirm that the Web Installer can install the locally committed firmware and that the
+   flashed device works correctly.
+6. Review all release changes:
+
+   ```bash
+   git diff
+   git status
+   ```
+
+7. Commit the updated source, version files, manifest, and firmware binaries.
+8. Push or merge the changes into `main`.
+9. GitHub Actions automatically validates and deploys the committed `installer/` directory
+   to GitHub Pages.
+10. Verify <https://caa1211.github.io/esp32-gt7-dashboard/> and perform another installer
+    test from the deployed site.
+11. Create the Git tag manually only after the deployed release has been verified.
+
+GitHub Actions does **not** install PlatformIO, build firmware, run the local publishing
+script, or generate binaries. It deploys the committed files exactly as they exist under
+`installer/`.
+
+### One-time GitHub Pages setting
+
+Configure the repository once at **Repository > Settings > Pages > Build and deployment >
+Source > GitHub Actions**. The workflow uses the official Pages artifact deployment flow;
+it does not create or maintain a `gh-pages` branch. The contents of `installer/` become the
+site root, so the public URL has no additional `/installer/` segment.

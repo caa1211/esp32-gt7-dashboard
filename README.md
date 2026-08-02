@@ -1,5 +1,5 @@
 
-# ESP32 GT7 Dashboard
+# ESP32 GT7 Dashboard ([Installer](https://caa1211.github.io/esp32-gt7-dashboard/))
 
 A standalone **Gran Turismo 7 dashboard** running entirely on an ESP32.
 No SimHub • No PC • Auto PS5 Discovery
