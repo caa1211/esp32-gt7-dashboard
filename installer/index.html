@@ -103,7 +103,6 @@
       .release-version {
         display: inline-flex;
         align-items: center;
-        margin-top: 16px;
         padding: 6px 10px;
         border: 1px solid rgba(56, 189, 248, 0.28);
         border-radius: 999px;
@@ -111,6 +110,32 @@
         color: #bae6fd;
         font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
         font-size: 0.85rem;
+      }
+
+      .version-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .kofi-button {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 11px;
+        border: 1px solid rgba(253, 164, 175, 0.4);
+        border-radius: 999px;
+        background: rgba(244, 63, 94, 0.14);
+        color: #fecdd3;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .kofi-button:hover {
+        background: rgba(244, 63, 94, 0.24);
+        color: #fff1f2;
       }
 
       h1 {
@@ -266,7 +291,19 @@
       <div class="title-row">
         <div class="title-copy">
           <h1>ESP32 GT7 Dashboard</h1>
-          <span class="release-version" id="release-version" aria-live="polite">Version loading…</span>
+          <div class="version-actions">
+            <span
+              class="release-version"
+              id="release-version"
+              aria-live="polite"
+            >Version loading…</span>
+            <a
+              class="kofi-button"
+              href="https://ko-fi.com/caa1211"
+              target="_blank"
+              rel="noopener noreferrer"
+            >☕ Support me on Ko-fi</a>
+          </div>
         </div>
         <aside class="corner-profile" aria-label="Project creator">
           <img class="corner-image" src="image.png" alt="ESP32 GT7 Dashboard project photo">

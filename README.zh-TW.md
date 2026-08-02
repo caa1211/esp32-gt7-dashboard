@@ -223,3 +223,11 @@ https://makerworld.com/zh/models/2171220-slim-minimal-case-for-esp32-cyd-2-4-2-8
 ## 授權
 
 本專案採用 **MIT License**。
+
+---
+
+## 支持專案
+
+如果這個儀表板對你有幫助，歡迎支持專案持續開發：
+
+☕ [**在 Ko-fi 支持我**](https://ko-fi.com/caa1211)

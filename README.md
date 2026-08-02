@@ -229,3 +229,12 @@ Many thanks to all of the authors and contributors who made these projects avail
 ## License
 
 This project is released under the MIT License.
+
+---
+
+## Support the Project
+
+If this dashboard has been useful to you, you can support its continued development:
+
+☕ [**Support me on Ko-fi**](https://ko-fi.com/caa1211)
+
