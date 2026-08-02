@@ -136,18 +136,40 @@
         line-height: 1.75;
       }
 
+      .compatibility-warning {
+        margin: 0 0 10px;
+        color: #fbbf24;
+        font-size: 0.85rem;
+        line-height: 1.6;
+        text-align: center;
+      }
+
       .install {
         display: flex;
         justify-content: center;
         padding: 8px 0 16px;
       }
 
-      .note {
-        margin: 12px 0 0;
-        color: #8fa3bb;
-        font-size: 0.9rem;
-        line-height: 1.6;
-        text-align: center;
+      .connect-button {
+        width: 280px;
+        max-width: 100%;
+        padding: 16px 28px;
+        border: 0;
+        border-radius: 12px;
+        background: #0ea5e9;
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-size: 1.12rem;
+        font-weight: 750;
+        box-shadow: 0 12px 28px rgba(14, 165, 233, 0.28);
+      }
+
+      .connect-button:hover { background: #38bdf8; }
+
+      .connect-button:focus-visible {
+        outline: 3px solid rgba(125, 211, 252, 0.65);
+        outline-offset: 3px;
       }
 
       .quick-start {
@@ -270,13 +292,13 @@
 
       <div class="install">
         <esp-web-install-button manifest="manifest.json">
+          <button class="connect-button" slot="activate">Connect &amp; install</button>
           <button slot="unsupported">Use Chrome, Edge, or another Web Serial browser</button>
         </esp-web-install-button>
       </div>
 
-      <p class="note">
-        Installing replaces the firmware currently stored on the device. Web Serial is not
-        available in every browser or on every mobile device.
+      <p class="compatibility-warning">
+        ⚠️ ESP32-2432S028 only. Installing replaces the firmware currently on the device.
       </p>
 
       <section class="quick-start" aria-labelledby="quick-start-title">
