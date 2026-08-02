@@ -103,13 +103,15 @@ http://192.168.4.1
 6. The dashboard will reboot automatically.
 7. Launch **Gran Turismo 7**.
 
+<p align="center">
+  <img src="photos/002.jpg" width="900" alt="ESP32 GT7 Dashboard">
+</p>
+
+
 The dashboard will automatically discover your PS5 on the local network.
 
 No IP address configuration is required.
 
-<p align="center">
-  <img src="photos/002.jpg" width="900" alt="ESP32 GT7 Dashboard">
-</p>
 
 ---
 

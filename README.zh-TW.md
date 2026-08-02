@@ -104,13 +104,11 @@ http://192.168.4.1
 6. 裝置會自動重新啟動。
 7. 開啟 **Gran Turismo 7**。
 
-之後儀表板會自動搜尋並連線到同一個區域網路中的 PS5。
-
-**不需要設定 IP 位址。**
-
 <p align="center">
   <img src="photos/002.jpg" width="900" alt="ESP32 GT7 Dashboard">
 </p>
+
+之後儀表板會自動搜尋並連線到同一個區域網路中的 PS5，不需要設定 PS5 IP 位址。
 
 ---
 
