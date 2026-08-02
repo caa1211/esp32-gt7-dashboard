@@ -29,7 +29,59 @@
           #07111f;
       }
 
+      .corner-profile {
+        flex: 0 0 clamp(96px, 12vw, 125px);
+        text-align: center;
+      }
+
+      .title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .title-copy { min-width: 0; }
+
+      .corner-image {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 18px;
+        object-fit: cover;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+      }
+
+      .facebook-link {
+        display: inline-block;
+        margin-top: 8px;
+        color: #8fa3bb;
+        font-size: 0.78rem;
+        font-weight: 500;
+        text-decoration: underline;
+        text-decoration-color: rgba(143, 163, 187, 0.35);
+        text-underline-offset: 3px;
+      }
+
+      .facebook-link:hover {
+        color: #b7c5d8;
+        text-decoration-color: currentColor;
+      }
+
+      @media (max-width: 600px) {
+        .corner-profile {
+          flex-basis: 82px;
+        }
+
+        .corner-image {
+          border-radius: 14px;
+        }
+
+      }
+
       main {
+        position: relative;
         width: min(100%, 680px);
         padding: clamp(28px, 6vw, 52px);
         border: 1px solid rgba(148, 163, 184, 0.22);
@@ -189,8 +241,21 @@
   <body>
     <main>
       <p class="eyebrow">USB Web Installer</p>
-      <h1>ESP32 GT7 Dashboard</h1>
-      <span class="release-version" id="release-version" aria-live="polite">Version loading…</span>
+      <div class="title-row">
+        <div class="title-copy">
+          <h1>ESP32 GT7 Dashboard</h1>
+          <span class="release-version" id="release-version" aria-live="polite">Version loading…</span>
+        </div>
+        <aside class="corner-profile" aria-label="Project creator">
+          <img class="corner-image" src="image.png" alt="ESP32 GT7 Dashboard project photo">
+          <a
+            class="facebook-link"
+            href="https://www.facebook.com/caa1211"
+            target="_blank"
+            rel="noopener noreferrer"
+          >facebook: caa1211</a>
+        </aside>
+      </div>
       <p class="lead">
         Flash the dashboard firmware directly from a compatible desktop browser.
         No PlatformIO installation is required.
