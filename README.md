@@ -54,7 +54,6 @@ Simply connect your ESP32 to the same Wi-Fi network as your PS5 and enjoy real-t
 
 Currently supported:
 
-- ESP32
 - ESP32-2432S028 (2.8" ILI9341 Touch Display)
 
 Additional ESP32 displays may be supported in future releases.
