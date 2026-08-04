@@ -1,3 +1,4 @@
+// Copyright (c) 2026 caa1211
 // --- 參數設定 ---
 var tireRadius = 0.30;   
 var triggerDiff = 7.0;    
