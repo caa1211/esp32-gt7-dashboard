@@ -8,6 +8,10 @@
   <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
 </p>
 
+<p align="center">
+  🎥 <a href="https://www.youtube.com/shorts/kHaoZkZnk8g"><strong>觀看儀表板示範影片</strong></a>
+</p>
+
 只需將 ESP32 與 PS5 連接到同一個 Wi-Fi 網路，即可直接接收 Gran Turismo 7 的即時遙測資料。
 
 ```

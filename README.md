@@ -8,6 +8,10 @@ No SimHub • No PC • Auto PS5 Discovery
   <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
 </p>
 
+<p align="center">
+  🎥 <a href="https://www.youtube.com/shorts/kHaoZkZnk8g"><strong>Watch the dashboard demo</strong></a>
+</p>
+
 
 Simply connect your ESP32 to the same Wi-Fi network as your PS5 and enjoy real-time telemetry directly from Gran Turismo 7.
 
