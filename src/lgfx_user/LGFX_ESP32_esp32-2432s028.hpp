@@ -20,8 +20,20 @@ Se vuoi operare in sicurezza, crea un backup o inseriscilo nella cartella del pr
 // https://github.com/lovyan03/LovyanGFX/blob/master/examples/HowToUse/2_user_setting/2_user_setting.ino
 
 
+#if defined(DISPLAY_PANEL_ST7789)
+static constexpr uint8_t DASHBOARD_DISPLAY_ROTATION = 1;
+static constexpr uint8_t DASHBOARD_TOUCH_ROTATION_OFFSET = 4;
+#else
+static constexpr uint8_t DASHBOARD_DISPLAY_ROTATION = 3;
+static constexpr uint8_t DASHBOARD_TOUCH_ROTATION_OFFSET = 6;
+#endif
+
 class LGFX : public lgfx::LGFX_Device{
+#if defined(DISPLAY_PANEL_ST7789)
+  lgfx::Panel_ST7789 _panel_instance;
+#else
   lgfx::Panel_ILI9341 _panel_instance;
+#endif
   lgfx::Bus_SPI       _bus_instance;
   lgfx::Light_PWM     _light_instance;
   lgfx::Touch_XPT2046 _touch_instance;
@@ -85,7 +97,7 @@ public:LGFX(void){
   cfg.y_max = 3700; // Valore Y massimo ottenuto dal touch screen (valore grezzo)
   cfg.pin_int = -1; // Numero pin a cui è collegato INT, TP IRQ 36
   cfg.bus_shared = false; // Imposta true se si utilizza lo stesso bus dello schermo
-  cfg.offset_rotation = 6; // Regolazione quando la direzione del display e del tocco non corrispondono Impostare con un valore compreso tra 0 e 7
+  cfg.offset_rotation = DASHBOARD_TOUCH_ROTATION_OFFSET; // Regolazione quando la direzione del display e del tocco non corrispondono Impostare con un valore compreso tra 0 e 7
   // Per la connessione SPI
   cfg.spi_host = VSPI_HOST;// 使Seleziona la SPI da utilizzare (HSPI_HOST o VSPI_HOST)
   cfg.freq = 1000000;      // Seleziona la SPI da utilizzare (HSPI_HOST o VSPI_HOST)

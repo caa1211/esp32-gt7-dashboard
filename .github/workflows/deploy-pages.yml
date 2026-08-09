@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           node <<'NODE'
-          const { readFile, stat } = require("node:fs/promises");
+          const { readFile, readdir, stat } = require("node:fs/promises");
           const { isAbsolute, relative, resolve, sep } = require("node:path");
 
           const installerRoot = resolve("installer");
@@ -82,29 +82,45 @@ jobs:
             await requireNonEmptyFile(indexPath, "Installer index");
             await requireNonEmptyFile(manifestPath, "Installer manifest");
 
-            let manifest;
-            try {
-              manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-            } catch (error) {
-              throw new Error(`Unable to parse installer/manifest.json: ${error.message}`);
+            const manifestNames = (await readdir(installerRoot)).filter((name) =>
+              /^manifest(?:-[a-z0-9-]+)?\.json$/i.test(name),
+            );
+            let binaryCount = 0;
+
+            for (const manifestName of manifestNames) {
+              const currentManifestPath = resolve(installerRoot, manifestName);
+              await requireNonEmptyFile(currentManifestPath, `Installer manifest "${manifestName}"`);
+
+              let manifest;
+              try {
+                manifest = JSON.parse(await readFile(currentManifestPath, "utf8"));
+              } catch (error) {
+                throw new Error(`Unable to parse installer/${manifestName}: ${error.message}`);
+              }
+
+              const parts = Array.isArray(manifest.builds)
+                ? manifest.builds.flatMap((build) =>
+                    Array.isArray(build?.parts) ? build.parts : [],
+                  )
+                : [];
+
+              if (parts.length === 0) {
+                throw new Error(`installer/${manifestName} does not reference any binaries.`);
+              }
+
+              for (const part of parts) {
+                const binaryPath = installerPath(part?.path);
+                await requireNonEmptyFile(
+                  binaryPath,
+                  `${manifestName} binary "${part.path}"`,
+                );
+                binaryCount += 1;
+              }
             }
 
-            const parts = Array.isArray(manifest.builds)
-              ? manifest.builds.flatMap((build) =>
-                  Array.isArray(build?.parts) ? build.parts : [],
-                )
-              : [];
-
-            if (parts.length === 0) {
-              throw new Error("installer/manifest.json does not reference any binaries.");
-            }
-
-            for (const part of parts) {
-              const binaryPath = installerPath(part?.path);
-              await requireNonEmptyFile(binaryPath, `Manifest binary "${part.path}"`);
-            }
-
-            console.log(`Validated installer and ${parts.length} manifest-referenced binaries.`);
+            console.log(
+              `Validated installer, ${manifestNames.length} manifests, and ${binaryCount} binary references.`,
+            );
           }
 
           main().catch((error) => {

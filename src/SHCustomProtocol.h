@@ -292,7 +292,7 @@ public:
 	void setup()
 	{
 		tft.init();
-		tft.setRotation(3);
+		tft.setRotation(DASHBOARD_DISPLAY_ROTATION);
 		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
 		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
 		tft.fillScreen(TFT_BLACK);

@@ -175,6 +175,38 @@
         padding: 8px 0 16px;
       }
 
+      .firmware-choice {
+        margin: 0 auto 14px;
+        max-width: 360px;
+      }
+
+      .firmware-choice label {
+        display: block;
+        margin-bottom: 7px;
+        color: #d8e2ef;
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .firmware-choice select {
+        width: 100%;
+        padding: 11px 36px 11px 13px;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        border-radius: 10px;
+        background: #172033;
+        color: #f8fafc;
+        font: inherit;
+      }
+
+      .firmware-choice p {
+        margin: 7px 0 0;
+        color: #8fa3bb;
+        font-size: 0.78rem;
+        line-height: 1.45;
+        text-align: center;
+      }
+
       .connect-button {
         width: 280px;
         max-width: 100%;
@@ -327,8 +359,17 @@
         <li>Leave the board connected until the installation finishes.</li>
       </ol>
 
+      <div class="firmware-choice">
+        <label for="display-controller">Display controller</label>
+        <select id="display-controller">
+          <option value="manifest.json">ILI9341 (standard)</option>
+          <option value="manifest-st7789.json">ST7789 (alternate)</option>
+        </select>
+        <p>Select the controller fitted to your ESP32-2432S028.</p>
+      </div>
+
       <div class="install">
-        <esp-web-install-button manifest="manifest.json">
+        <esp-web-install-button id="install-button" manifest="manifest.json">
           <button class="connect-button" slot="activate">Connect &amp; install</button>
           <button slot="unsupported">Use Chrome, Edge, or another Web Serial browser</button>
         </esp-web-install-button>
@@ -368,17 +409,31 @@
     </main>
 
     <script>
-      fetch("manifest.json", { cache: "no-store" })
-        .then((response) => {
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response.json();
-        })
-        .then((manifest) => {
-          document.getElementById("release-version").textContent = `Version ${manifest.version}`;
-        })
-        .catch(() => {
-          document.getElementById("release-version").textContent = "Version unavailable";
-        });
+      const controllerSelect = document.getElementById("display-controller");
+      const installButton = document.getElementById("install-button");
+      const versionLabel = document.getElementById("release-version");
+
+      function selectManifest(manifestPath) {
+        installButton.setAttribute("manifest", manifestPath);
+
+        fetch(manifestPath, { cache: "no-store" })
+          .then((response) => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+          })
+          .then((manifest) => {
+            versionLabel.textContent = `Version ${manifest.version}`;
+          })
+          .catch(() => {
+            versionLabel.textContent = "Version unavailable";
+          });
+      }
+
+      controllerSelect.addEventListener("change", () => {
+        selectManifest(controllerSelect.value);
+      });
+
+      selectManifest(controllerSelect.value);
     </script>
   </body>
 </html>

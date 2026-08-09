@@ -5,11 +5,11 @@ PlatformIO and does not compile the firmware. Build and test every release local
 committing its binary images.
 
 `VERSION` is the only manually controlled version source. The publish helper synchronizes
-that value into the generated C++ header and ESP Web Tools manifest.
+that value into the generated C++ header and both ESP Web Tools manifests.
 
 ## Flash layout
 
-The project uses the `esp32` PlatformIO environment, the classic
+The project uses the `esp32` and `esp32-st7789` PlatformIO environments, the classic
 `esp32doit-devkit-v1` board, Arduino framework, and `huge_app.csv` partition table.
 PlatformIO's resolved upload metadata defines this flash layout:
 
@@ -18,7 +18,8 @@ PlatformIO's resolved upload metadata defines this flash layout:
 | `0x1000` | `installer/firmware/bootloader.bin` | `.pio/build/esp32/bootloader.bin` |
 | `0x8000` | `installer/firmware/partitions.bin` | `.pio/build/esp32/partitions.bin` |
 | `0xE000` | `installer/firmware/boot_app0.bin` | PlatformIO's Arduino ESP32 package, `tools/partitions/boot_app0.bin` |
-| `0x10000` | `installer/firmware/firmware.bin` | `.pio/build/esp32/firmware.bin` |
+| `0x10000` | `installer/firmware/firmware-ili9341.bin` | `.pio/build/esp32/firmware.bin` |
+| `0x10000` | `installer/firmware/firmware-st7789.bin` | `.pio/build/esp32-st7789/firmware.bin` |
 
 These offsets are not arbitrary: the ESP32 PlatformIO integration places the bootloader at
 `0x1000`, the partition table at `0x8000`, the OTA data initializer at `0xE000`, and the
@@ -27,7 +28,7 @@ starts at `0xE000` and the first application partition starts at `0x10000`.
 
 Re-check PlatformIO's verbose upload command or resolved project metadata if the board,
 framework platform, or partition table changes. Update both this document and
-`installer/manifest.json` if the flash map changes.
+`installer/manifest.json` and `installer/manifest-st7789.json` if the flash map changes.
 
 ## Build and test locally
 
@@ -39,10 +40,11 @@ framework platform, or partition table changes. Update both this document and
    node scripts/publish-firmware.mjs 1.2.3
    ```
 
-   The script validates the version, updates `VERSION`, `include/version.h`, and
-   `installer/manifest.json`, then runs `pio run -e esp32`. After a successful build it
-   validates and copies all four non-empty binaries into `installer/firmware/`, verifies
-   every manifest binary, and prints sizes, SHA-256 hashes, and a release summary.
+   The script validates the version; updates `VERSION`, `include/version.h`, and both
+   installer manifests; then builds the `esp32` ILI9341 and `esp32-st7789` environments.
+   After successful builds it validates and copies the three shared boot files plus both
+   application images into `installer/firmware/`, verifies every manifest binary, and
+   prints sizes, SHA-256 hashes, and a release summary.
 
    Running the command without a version preserves the existing behavior by reading the
    current value from `VERSION`:
@@ -77,25 +79,26 @@ framework platform, or partition table changes. Update both this document and
 
 ## Stage the installer binaries
 
-Create `installer/firmware/` if necessary, then copy the four real binary files listed in
-the flash-layout table into it. The first, second, and fourth files come from
-`.pio/build/esp32/`. Locate `boot_app0.bin` in the installed Arduino ESP32 framework package
-reported by PlatformIO; on typical systems it is under:
+Create `installer/firmware/` if necessary, then copy the five real binary files listed in
+the flash-layout table into it. The two application images come from their respective
+PlatformIO environment build directories. Locate `boot_app0.bin` in the installed Arduino
+ESP32 framework package reported by PlatformIO; on typical systems it is under:
 
 ```text
 <PlatformIO home>/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin
 ```
 
 Do not commit `.pio/`. Do not add empty or placeholder binary files. Before committing,
-verify that all four installer binaries exist and have non-zero sizes:
+verify that all five installer binaries exist and have non-zero sizes:
 
 ```bash
 git status --short
-git check-ignore -v installer/firmware/firmware.bin
+git check-ignore -v installer/firmware/firmware-ili9341.bin
+git check-ignore -v installer/firmware/firmware-st7789.bin
 ```
 
-The second command should produce no output. Review the files that will be committed, then
-commit the four binaries together with any intentional manifest version change.
+The `git check-ignore` commands should produce no output. Review the files that will be
+committed, then commit the five binaries together with both manifest version changes.
 
 ## Verify the installer
 
@@ -104,11 +107,12 @@ commit the four binaries together with any intentional manifest version change.
    HTTPS Pages site is the most representative test.
 2. Open the installer in Chrome, Edge, or another desktop browser with Web Serial support.
 3. Connect a test ESP32 using a data-capable USB cable and close any serial monitor.
-4. Select **Install firmware**, choose the correct serial port, and complete the flash.
+4. Select the correct display controller, select **Install firmware**, choose the correct
+   serial port, and complete the flash.
 5. Power-cycle the device and repeat the functional checks above.
 6. In repository **Settings > Pages**, ensure the source is set to **GitHub Actions**. Confirm
-   that the deployment succeeded and that the public installer loads its manifest and all
-   four binary URLs without 404 errors.
+   that the deployment succeeded and that the public installer loads both manifests and all
+   five binary URLs without 404 errors.
 
 The Pages workflow is intentionally path-filtered and uploads only `installer/`; source code,
 documentation, `.pio/`, and local build tooling are not included in the published artifact.

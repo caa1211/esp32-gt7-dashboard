@@ -54,9 +54,12 @@ Simply connect your ESP32 to the same Wi-Fi network as your PS5 and enjoy real-t
 
 Currently supported:
 
-- ESP32-2432S028 (2.8" ILI9341 Touch Display)
+- ESP32-2432S028 with 2.8" ILI9341 touch display
+- ESP32-2432S028 with 2.8" ST7789 touch display
 
-Additional ESP32 displays may be supported in future releases.
+<p align="center">
+  <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
+</p>
 
 ---
 
@@ -68,9 +71,10 @@ No development tools are required.
 
 1. Connect your ESP32 to your computer using USB.
 2. Open the Web Installer.
-3. Click **Install**.
-4. Wait for the installation to complete.
-5. Disconnect the USB cable and power the device.
+3. Select the display controller fitted to the board: **ILI9341** or **ST7789**.
+4. Click **Install**.
+5. Wait for the installation to complete.
+6. Disconnect the USB cable and power the device.
 
 👉 **https://caa1211.github.io/esp32-gt7-dashboard/**
 
@@ -173,13 +177,27 @@ This project is built using:
 - Arduino Framework
 - ESP32
 
-Clone the repository and build with PlatformIO.
+Clone the repository, then build both display-controller variants with PlatformIO:
 
 ```bash
 git clone https://github.com/caa1211/esp32-gt7-dashboard.git
 cd esp32-gt7-dashboard
-pio run
+pio run -e esp32 -e esp32-st7789
 ```
+
+The application images are generated at:
+
+- `.pio/build/esp32/firmware.bin` — ILI9341
+- `.pio/build/esp32-st7789/firmware.bin` — ST7789
+
+For a release build that also synchronizes the version, copies both images into
+`installer/firmware/`, and validates both installer manifests, run:
+
+```bash
+npm run publish:firmware -- 1.2.5
+```
+
+Replace `1.2.5` with the version being released.
 
 ---
 

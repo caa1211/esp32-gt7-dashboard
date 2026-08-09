@@ -56,8 +56,11 @@
 目前支援：
 
 - ESP32-2432S028（2.8 吋 ILI9341 觸控螢幕）
+- ESP32-2432S028（2.8 吋 ST7789 觸控螢幕）
 
-未來將陸續支援更多 ESP32 顯示器。
+<p align="left">
+  <img src="photos/esp32.jpg" width="400" alt="ESP32-2432S028">
+</p>
 
 ---
 
@@ -69,9 +72,10 @@
 
 1. 使用 USB 將 ESP32 連接到電腦。
 2. 開啟 Web Installer。
-3. 點擊 **Install**。
-4. 等待安裝完成。
-5. 拔除 USB 並重新上電。
+3. 選擇板子使用的顯示控制器：**ILI9341** 或 **ST7789**。
+4. 點擊 **Install**。
+5. 等待安裝完成。
+6. 拔除 USB 並重新上電。
 
 👉 **https://caa1211.github.io/esp32-gt7-dashboard/**
 
@@ -169,13 +173,27 @@ http://192.168.4.1
 - Arduino Framework
 - ESP32
 
-下載原始碼後使用 PlatformIO 編譯：
+下載原始碼後，使用 PlatformIO 同時編譯兩種顯示控制器版本：
 
 ```bash
 git clone https://github.com/caa1211/esp32-gt7-dashboard.git
 cd esp32-gt7-dashboard
-pio run
+pio run -e esp32 -e esp32-st7789
 ```
+
+產生的 application image 位於：
+
+- `.pio/build/esp32/firmware.bin` — ILI9341
+- `.pio/build/esp32-st7789/firmware.bin` — ST7789
+
+若要建立正式發佈版本，同時同步版本號、複製兩份 image 到
+`installer/firmware/`，並驗證兩份 installer manifest，請執行：
+
+```bash
+npm run publish:firmware -- 1.2.5
+```
+
+請將 `1.2.5` 替換成這次要發佈的版本號。
 
 ---
 
