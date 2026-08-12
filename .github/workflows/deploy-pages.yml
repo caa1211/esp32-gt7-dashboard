@@ -41,6 +41,7 @@ jobs:
           const installerRoot = resolve("installer");
           const indexPath = resolve(installerRoot, "index.html");
           const manifestPath = resolve(installerRoot, "manifest.json");
+          const releasesPath = resolve(installerRoot, "releases.json");
 
           async function requireNonEmptyFile(filePath, label) {
             let details;
@@ -61,12 +62,12 @@ jobs:
             }
           }
 
-          function installerPath(manifestPartPath) {
+          function installerPath(manifestDirectory, manifestPartPath) {
             if (typeof manifestPartPath !== "string" || manifestPartPath.length === 0) {
               throw new Error("Every manifest part must have a non-empty string path.");
             }
 
-            const resolvedPath = resolve(installerRoot, manifestPartPath);
+            const resolvedPath = resolve(manifestDirectory, manifestPartPath);
             const relativePath = relative(installerRoot, resolvedPath);
             if (
               isAbsolute(relativePath) ||
@@ -81,14 +82,28 @@ jobs:
           async function main() {
             await requireNonEmptyFile(indexPath, "Installer index");
             await requireNonEmptyFile(manifestPath, "Installer manifest");
+            await requireNonEmptyFile(releasesPath, "Installer release index");
 
-            const manifestNames = (await readdir(installerRoot)).filter((name) =>
+            const rootManifestNames = (await readdir(installerRoot)).filter((name) =>
               /^manifest(?:-[a-z0-9-]+)?\.json$/i.test(name),
             );
+            const releaseIndex = JSON.parse(await readFile(releasesPath, "utf8"));
+            const releases = Array.isArray(releaseIndex.versions) ? releaseIndex.versions : [];
+
+            if (releases.length === 0 || releases.length > 5) {
+              throw new Error("installer/releases.json must contain between 1 and 5 versions.");
+            }
+
+            const manifestPaths = [
+              ...rootManifestNames.map((name) => resolve(installerRoot, name)),
+              ...releases.flatMap((release) =>
+                Object.values(release.manifests ?? {}).map((path) => resolve(installerRoot, path)),
+              ),
+            ];
             let binaryCount = 0;
 
-            for (const manifestName of manifestNames) {
-              const currentManifestPath = resolve(installerRoot, manifestName);
+            for (const currentManifestPath of manifestPaths) {
+              const manifestName = relative(installerRoot, currentManifestPath);
               await requireNonEmptyFile(currentManifestPath, `Installer manifest "${manifestName}"`);
 
               let manifest;
@@ -109,7 +124,7 @@ jobs:
               }
 
               for (const part of parts) {
-                const binaryPath = installerPath(part?.path);
+                const binaryPath = installerPath(resolve(currentManifestPath, ".."), part?.path);
                 await requireNonEmptyFile(
                   binaryPath,
                   `${manifestName} binary "${part.path}"`,
@@ -119,7 +134,7 @@ jobs:
             }
 
             console.log(
-              `Validated installer, ${manifestNames.length} manifests, and ${binaryCount} binary references.`,
+              `Validated installer, ${manifestPaths.length} manifests, and ${binaryCount} binary references.`,
             );
           }
 

@@ -197,6 +197,11 @@ The application images are generated at:
 For a release build that also synchronizes the version, copies both images into
 `installer/firmware/`, and validates both installer manifests, run:
 
+First add a short change summary for the new version to
+`installer/release-notes.json`. The publish command archives both display
+variants for the installer and automatically keeps only the five most recent
+versions.
+
 ```bash
 npm run publish:firmware -- 1.2.5
 ```

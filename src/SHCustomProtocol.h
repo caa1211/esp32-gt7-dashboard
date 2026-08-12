@@ -120,6 +120,7 @@ private:
 	String brakeBias = "0";
 	String brake = "0";
 	String lapInvalidated = "False";
+	float tyreTemperatures[4] = {NAN, NAN, NAN, NAN};
 	uint16_t touchX, touchY; // definisce i due interi per gestione touchscreen
 	int numButtons = 6;		 // Variabile per il numero di pulsanti
 
@@ -430,6 +431,11 @@ public:
 
 		brakeBias = String(fuelPercent, 0);
 		fuelAlertActive = String(fuelPercent, 1);
+
+		for (int tyreIndex = 0; tyreIndex < 4; tyreIndex++)
+		{
+			tyreTemperatures[tyreIndex] = data.tyreTemp[tyreIndex];
+		}
 
 		// 由獨立 library 估算剩餘油量圈數。
 		// 注意：GT7FuelEstimator 接收的是公升，不是百分比。
@@ -1001,6 +1007,12 @@ public:
 	{
 		drawRpmMeter(0, 0, SCREEN_WIDTH, HALF_CELL_HEIGHT);
 		drawGear(COL[2], COL[1]);
+		drawTyreTemperatureStrip(
+			COL[2] + 1,
+			ROW[3] - 22,
+			CELL_WIDTH - 2,
+			18,
+			forceUpdate);
 
 		drawLapCellSprite(
 			COL[0],
@@ -1485,6 +1497,118 @@ public:
 			prevData[id] = data;
 			prevColor[id] = color;
 		}
+	}
+
+	uint16_t interpolateTyreColor(
+		uint8_t redStart,
+		uint8_t greenStart,
+		uint8_t blueStart,
+		uint8_t redEnd,
+		uint8_t greenEnd,
+		uint8_t blueEnd,
+		float amount)
+	{
+		amount = constrain(amount, 0.0f, 1.0f);
+
+		return tft.color565(
+			static_cast<uint8_t>(redStart + (redEnd - redStart) * amount),
+			static_cast<uint8_t>(greenStart + (greenEnd - greenStart) * amount),
+			static_cast<uint8_t>(blueStart + (blueEnd - blueStart) * amount));
+	}
+
+	uint16_t tyreTemperatureColor(float temperature)
+	{
+		if (!isfinite(temperature) || temperature <= 0.0f)
+		{
+			return TFT_DARKGREY;
+		}
+
+		if (temperature <= 50.0f)
+		{
+			return tft.color565(0, 20, 120);
+		}
+
+		if (temperature < 65.0f)
+		{
+			return interpolateTyreColor(
+				0, 20, 120,
+				0, 200, 255,
+				(temperature - 50.0f) / 15.0f);
+		}
+
+		if (temperature < 85.0f)
+		{
+			return interpolateTyreColor(
+				0, 200, 255,
+				0, 220, 60,
+				(temperature - 65.0f) / 20.0f);
+		}
+
+		if (temperature < 92.5f)
+		{
+			return interpolateTyreColor(
+				0, 220, 60,
+				255, 220, 0,
+				(temperature - 85.0f) / 7.5f);
+		}
+
+		if (temperature < 100.0f)
+		{
+			return interpolateTyreColor(
+				255, 220, 0,
+				255, 0, 0,
+				(temperature - 92.5f) / 7.5f);
+		}
+
+		return TFT_RED;
+	}
+
+	void drawTyreTemperatureStrip(
+		int32_t x,
+		int32_t y,
+		int width,
+		int height,
+		bool forceUpdate = false)
+	{
+		const int gap = 2;
+		const int blockWidth = (width - gap) / 2;
+		const int blockHeight = (height - gap) / 2;
+		const String gearId = "tyreTemperatureGear";
+		const bool gearChanged = prevData[gearId] != gear;
+
+		for (int tyreIndex = 0; tyreIndex < 4; tyreIndex++)
+		{
+			const int column = tyreIndex % 2;
+			const int row = tyreIndex / 2;
+			const int blockX = x + column * (blockWidth + gap);
+			const int blockY = y + row * (blockHeight + gap);
+			const int currentWidth = column == 1
+				? width - blockWidth - gap
+				: blockWidth;
+			const int currentHeight = row == 1
+				? height - blockHeight - gap
+				: blockHeight;
+			const float temperature = tyreTemperatures[tyreIndex];
+			const uint16_t color = tyreTemperatureColor(temperature);
+			const String colorId = "tyreTemperatureColor" + String(tyreIndex);
+
+			if (!forceUpdate && !gearChanged && prevColor[colorId] == color)
+			{
+				continue;
+			}
+
+			tft.fillRoundRect(
+				blockX,
+				blockY,
+				currentWidth,
+				currentHeight,
+				2,
+				color);
+
+			prevColor[colorId] = color;
+		}
+
+		prevData[gearId] = gear;
 	}
 
 	void drawLapCellSprite(

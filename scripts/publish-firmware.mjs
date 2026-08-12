@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -29,6 +29,10 @@ const manifestPaths = [
   manifestPath,
   join(projectDirectory, "installer", "manifest-st7789.json"),
 ];
+const releasesPath = join(projectDirectory, "installer", "releases.json");
+const releaseNotesPath = join(projectDirectory, "installer", "release-notes.json");
+const versionsDirectory = join(projectDirectory, "installer", "versions");
+const retainedReleaseCount = 5;
 const versionPattern = /^\d+\.\d+\.\d+$/;
 
 function displayPath(path) {
@@ -238,6 +242,82 @@ async function copyVerifiedBinary(source, destinationName, copiedFiles) {
   console.log(`${destinationName}: ${size} bytes, SHA-256 ${await sha256(destination)}`);
 }
 
+async function archiveRelease(version, manifests, copiedFiles, modifiedFiles) {
+  const notesByVersion = JSON.parse(await readFile(releaseNotesPath, "utf8"));
+  const notes = notesByVersion[version];
+
+  if (!Array.isArray(notes) || notes.length === 0) {
+    throw new Error(
+      `Add at least one short entry for ${version} to installer/release-notes.json.`,
+    );
+  }
+
+  const versionDirectory = join(versionsDirectory, version);
+  await mkdir(versionDirectory, { recursive: true });
+
+  for (const binaryName of [
+    "bootloader.bin",
+    "partitions.bin",
+    "boot_app0.bin",
+    ...variants.map((variant) => variant.firmwareName),
+  ]) {
+    const source = join(firmwareDirectory, binaryName);
+    const destination = join(versionDirectory, binaryName);
+    await copyFile(source, destination);
+    await verifyNonEmpty(destination);
+    copiedFiles.push(displayPath(destination));
+  }
+
+  const archivedManifests = {};
+  for (const { manifest } of manifests) {
+    const variant = manifest.name.includes("ST7789") ? variants[1] : variants[0];
+    const archivedManifestName = `manifest-${variant.id}.json`;
+    const archivedManifest = structuredClone(manifest);
+
+    for (const build of archivedManifest.builds ?? []) {
+      for (const part of build.parts ?? []) {
+        part.path = part.path.replace(/^firmware\//, "");
+      }
+    }
+
+    await writeIfChanged(
+      join(versionDirectory, archivedManifestName),
+      `${JSON.stringify(archivedManifest, null, 2)}\n`,
+      modifiedFiles,
+    );
+    archivedManifests[variant.id] = `versions/${version}/${archivedManifestName}`;
+  }
+
+  const existingReleases = JSON.parse(
+    (await fileContents(releasesPath)) ?? '{"versions":[]}',
+  );
+  const releaseEntry = {
+    version,
+    notes,
+    manifests: archivedManifests,
+  };
+  const versions = [
+    releaseEntry,
+    ...(existingReleases.versions ?? []).filter((entry) => entry.version !== version),
+  ].slice(0, retainedReleaseCount);
+
+  await writeIfChanged(
+    releasesPath,
+    `${JSON.stringify({ versions }, null, 2)}\n`,
+    modifiedFiles,
+  );
+
+  const retainedVersions = new Set(versions.map((entry) => entry.version));
+  for (const previousRelease of existingReleases.versions ?? []) {
+    if (!retainedVersions.has(previousRelease.version)) {
+      await rm(join(versionsDirectory, previousRelease.version), {
+        recursive: true,
+        force: true,
+      });
+    }
+  }
+}
+
 async function main() {
   const { suppliedVersion, skipBuild } = parseArguments();
   const version = await resolveVersion(suppliedVersion);
@@ -286,6 +366,7 @@ async function main() {
 
   manifests = await verifySynchronizedVersion(version);
   await verifyManifestBinaries(manifests);
+  await archiveRelease(version, manifests, copiedFiles, modifiedFiles);
   printSummary({ version, skipBuild, copiedFiles, modifiedFiles });
 }
 

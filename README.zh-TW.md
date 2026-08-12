@@ -193,6 +193,9 @@ pio run -e esp32 -e esp32-st7789
 若要建立正式發佈版本，同時同步版本號、複製兩份 image 到
 `installer/firmware/`，並驗證兩份 installer manifest，請執行：
 
+請先在 `installer/release-notes.json` 加入新版本的簡短差異說明。發布指令會將
+兩種螢幕版本封存給 Installer 使用，並自動只保留最近五個版本。
+
 ```bash
 npm run publish:firmware -- 1.2.5
 ```

@@ -103,14 +103,20 @@
       .release-version {
         display: inline-flex;
         align-items: center;
+        gap: 7px;
         padding: 6px 10px;
         border: 1px solid rgba(56, 189, 248, 0.28);
         border-radius: 999px;
         background: rgba(14, 165, 233, 0.1);
         color: #bae6fd;
+        cursor: pointer;
         font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
         font-size: 0.85rem;
       }
+
+      .release-version:hover { background: rgba(14, 165, 233, 0.18); }
+
+      .version-chevron { font-size: 0.7rem; }
 
       .version-actions {
         display: flex;
@@ -206,6 +212,87 @@
         line-height: 1.45;
         text-align: center;
       }
+
+      .version-dialog {
+        width: min(calc(100% - 32px), 460px);
+        padding: 0;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 18px;
+        background: #111c2c;
+        color: #e7eef8;
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+      }
+
+      .version-dialog::backdrop { background: rgba(2, 6, 23, 0.72); }
+
+      .version-dialog-content { padding: 22px; }
+
+      .version-dialog-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .version-dialog h2 { margin: 0; font-size: 1.15rem; }
+
+      .version-dialog-close {
+        border: 0;
+        background: transparent;
+        color: #94a3b8;
+        cursor: pointer;
+        font-size: 1.35rem;
+      }
+
+      .version-list { display: grid; gap: 9px; margin-top: 18px; }
+
+      .version-option {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        background: #172033;
+        color: #e7eef8;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+      }
+
+      .version-option:hover { border-color: rgba(56, 189, 248, 0.5); }
+
+      .version-option[aria-current="true"] {
+        border-color: #38bdf8;
+        background: rgba(14, 165, 233, 0.13);
+      }
+
+      .version-option small { color: #7dd3fc; }
+
+      .version-notes {
+        margin: 14px 0 0;
+        padding-left: 20px;
+        color: #b7c5d8;
+        font-size: 0.85rem;
+        line-height: 1.55;
+      }
+
+      .version-dialog-confirm {
+        width: 100%;
+        margin-top: 18px;
+        padding: 11px 16px;
+        border: 0;
+        border-radius: 10px;
+        background: #0ea5e9;
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 750;
+      }
+
+      .version-dialog-confirm:hover { background: #38bdf8; }
 
       .connect-button {
         width: 280px;
@@ -324,11 +411,13 @@
         <div class="title-copy">
           <h1>ESP32 GT7 Dashboard</h1>
           <div class="version-actions">
-            <span
+            <button
               class="release-version"
-              id="release-version"
+              id="version-menu-button"
+              type="button"
+              aria-haspopup="dialog"
               aria-live="polite"
-            >Version loading…</span>
+            ><span id="release-version">Version loading…</span><span class="version-chevron" aria-hidden="true">▼</span></button>
             <a
               class="kofi-button"
               href="https://ko-fi.com/caa1211"
@@ -362,8 +451,8 @@
       <div class="firmware-choice">
         <label for="display-controller">Display controller</label>
         <select id="display-controller">
-          <option value="manifest.json">ILI9341 (standard)</option>
-          <option value="manifest-st7789.json">ST7789 (alternate)</option>
+          <option value="ili9341">ILI9341 (standard)</option>
+          <option value="st7789">ST7789 (alternate)</option>
         </select>
         <p>Select the controller fitted to your ESP32-2432S028.</p>
       </div>
@@ -408,32 +497,111 @@
       </footer>
     </main>
 
+    <dialog class="version-dialog" id="version-dialog">
+      <div class="version-dialog-content">
+        <div class="version-dialog-header">
+          <h2>Select firmware version</h2>
+          <button class="version-dialog-close" id="version-dialog-close" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="version-list" id="version-list"></div>
+        <ul class="version-notes" id="version-notes"></ul>
+        <button class="version-dialog-confirm" id="version-dialog-confirm" type="button">Use selected version</button>
+      </div>
+    </dialog>
+
     <script>
       const controllerSelect = document.getElementById("display-controller");
       const installButton = document.getElementById("install-button");
       const versionLabel = document.getElementById("release-version");
+      const versionMenuButton = document.getElementById("version-menu-button");
+      const versionDialog = document.getElementById("version-dialog");
+      const versionDialogClose = document.getElementById("version-dialog-close");
+      const versionDialogConfirm = document.getElementById("version-dialog-confirm");
+      const versionList = document.getElementById("version-list");
+      const versionNotes = document.getElementById("version-notes");
+      let releases = [];
+      let selectedVersion = "";
+      let previewVersion = "";
 
-      function selectManifest(manifestPath) {
+      function selectedRelease() {
+        return releases.find((release) => release.version === selectedVersion);
+      }
+
+      function selectManifest() {
+        const release = selectedRelease();
+        if (!release) return;
+
+        const manifestPath = release.manifests[controllerSelect.value];
         installButton.setAttribute("manifest", manifestPath);
+        versionLabel.textContent = `Version ${release.version}`;
 
-        fetch(manifestPath, { cache: "no-store" })
-          .then((response) => {
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-          })
-          .then((manifest) => {
-            versionLabel.textContent = `Version ${manifest.version}`;
-          })
-          .catch(() => {
-            versionLabel.textContent = "Version unavailable";
+      }
+
+      function renderVersionDialog() {
+        const release = releases.find((item) => item.version === previewVersion);
+        if (!release) return;
+
+        versionList.replaceChildren();
+        releases.forEach((item, index) => {
+          const option = document.createElement("button");
+          option.type = "button";
+          option.className = "version-option";
+          option.dataset.version = item.version;
+          option.setAttribute("aria-current", String(item.version === previewVersion));
+          const label = document.createElement("span");
+          label.textContent = `Version ${item.version}`;
+          const status = document.createElement("small");
+          status.textContent = index === 0 ? "Latest" : "";
+          option.append(label, status);
+          option.addEventListener("click", () => {
+            previewVersion = item.version;
+            renderVersionDialog();
           });
+          versionList.append(option);
+        });
+
+        versionNotes.replaceChildren();
+        for (const note of release.notes ?? []) {
+          const item = document.createElement("li");
+          item.textContent = note;
+          versionNotes.append(item);
+        }
+
+        versionDialogConfirm.textContent = `Use Version ${release.version}`;
       }
 
       controllerSelect.addEventListener("change", () => {
-        selectManifest(controllerSelect.value);
+        selectManifest();
       });
 
-      selectManifest(controllerSelect.value);
+      versionMenuButton.addEventListener("click", () => {
+        if (releases.length === 0) return;
+        previewVersion = selectedVersion;
+        renderVersionDialog();
+        versionDialog.showModal();
+      });
+
+      versionDialogClose.addEventListener("click", () => versionDialog.close());
+      versionDialogConfirm.addEventListener("click", () => {
+        selectedVersion = previewVersion;
+        selectManifest();
+        versionDialog.close();
+      });
+
+      fetch("releases.json", { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((releaseIndex) => {
+          releases = releaseIndex.versions.slice(0, 5);
+          selectedVersion = releases[0]?.version ?? "";
+          selectManifest();
+        })
+        .catch(() => {
+          versionLabel.textContent = "Version unavailable";
+          versionMenuButton.disabled = true;
+        });
     </script>
   </body>
 </html>

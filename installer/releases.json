@@ -1,0 +1,24 @@
+{
+  "versions": [
+    {
+      "version": "1.2.5",
+      "notes": [
+        "Added tyre-temperature colour display."
+      ],
+      "manifests": {
+        "ili9341": "versions/1.2.5/manifest-ili9341.json",
+        "st7789": "versions/1.2.5/manifest-st7789.json"
+      }
+    },
+    {
+      "version": "1.2.4",
+      "notes": [
+        "Added ST7789 display support."
+      ],
+      "manifests": {
+        "ili9341": "versions/1.2.4/manifest-ili9341.json",
+        "st7789": "versions/1.2.4/manifest-st7789.json"
+      }
+    }
+  ]
+}

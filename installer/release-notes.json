@@ -1,0 +1,8 @@
+{
+  "1.2.5": [
+    "Added tyre-temperature colour display."
+  ],
+  "1.2.4": [
+    "Added ST7789 display support."
+  ]
+}
