@@ -1,4 +1,7 @@
 {
+  "1.2.6": [
+    "Introduced the refined low-RAM GT3 dashboard UI."
+  ],
   "1.2.5": [
     "Added tyre-temperature colour display."
   ],
