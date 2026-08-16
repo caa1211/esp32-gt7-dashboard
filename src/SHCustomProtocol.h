@@ -73,8 +73,17 @@ namespace DashboardLayout
 
 	static constexpr int TYRE_W = 69;
 	static constexpr int TYRE_H = 25;
+	static constexpr int TYRE_CORNER_RADIUS = 2;
 	static constexpr int TYRE_X = CENTER_X - TYRE_W / 2;
 	static constexpr int TYRE_Y = 164;
+	static constexpr int PEDAL_BAR_W = 13;
+	static constexpr int PEDAL_BAR_H = TYRE_H + 1;
+	static constexpr int PEDAL_BAR_Y = TYRE_Y;
+	// Centre each pedal bar in the free space between the tyre cluster and side panels.
+	// Mirrored placement keeps both bar centres symmetric around screen X=160.
+	// Preserve the previous bar centre while narrowing from 17 to 13 pixels.
+	static constexpr int BRAKE_BAR_X = 106;
+	static constexpr int THROTTLE_BAR_X = WIDTH - BRAKE_BAR_X - PEDAL_BAR_W;
 
 	static constexpr int SPEED_LABEL_Y = 52;
 	static constexpr int SPEED_VALUE_Y = 70;
@@ -197,8 +206,10 @@ private:
 	String tyrePressureRearLeft = "00.0";
 	String fuelAlertActive = "False";
 	String tcLevel = "0";
+	String tcFilteredLevel = "0";
 	String tcActive = "0";
 	String absLevel = "0";
+	String absFilteredLevel = "0";
 	String absActive = "0";
 	String isTCCutNull = "True";
 	String tcTcCut = "0  0";
@@ -551,6 +562,12 @@ public:
 
 		tcLevel = String(throttlePercent);
 		absLevel = String(brakePercent);
+		// GT7 exposes both driver pedal position and the filtered output actually
+		// applied by the simulation (after traction/ABS intervention).
+		tcFilteredLevel = String(constrain(
+			static_cast<int>(data.throttleFiltered * 100.0f / 255.0f), 0, 100));
+		absFilteredLevel = String(constrain(
+			static_cast<int>(data.brakeFiltered * 100.0f / 255.0f), 0, 100));
 
 		const uint16_t flags = static_cast<uint16_t>(data.flags);
 
@@ -636,6 +653,10 @@ public:
 		// 16：煞車百分比
 		absLevel =
 			FlowSerialReadStringUntil(';');
+		// SimHub's existing protocol has no separate filtered pedal channels.
+		// Mirror the input so the dual-layer renderer remains backward compatible.
+		tcFilteredLevel = tcLevel;
+		absFilteredLevel = absLevel;
 
 		// 17：ABS 是否介入
 		absActive =
@@ -1170,6 +1191,14 @@ public:
 		drawGearShiftArcs(forceUpdate);
 		drawTyreTemperatureStrip(DashboardLayout::TYRE_X, DashboardLayout::TYRE_Y,
 			DashboardLayout::TYRE_W, DashboardLayout::TYRE_H, forceUpdate, 1);
+		drawPedalProgress(DashboardLayout::BRAKE_BAR_X, DashboardLayout::PEDAL_BAR_Y,
+			DashboardLayout::PEDAL_BAR_W, DashboardLayout::PEDAL_BAR_H,
+			absLevel.toInt(), absFilteredLevel.toInt(), "gt3BrakeBar",
+			tft.color565(218, 220, 224), forceUpdate);
+		drawPedalProgress(DashboardLayout::THROTTLE_BAR_X, DashboardLayout::PEDAL_BAR_Y,
+			DashboardLayout::PEDAL_BAR_W, DashboardLayout::PEDAL_BAR_H,
+			tcLevel.toInt(), tcFilteredLevel.toInt(), "gt3ThrottleBar",
+			tft.color565(218, 220, 224), forceUpdate);
 
 		drawDashboardValue(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_VALUE_Y[0],
 			DashboardLayout::SIDE_WIDTH - DashboardLayout::INNER_PADDING, DashboardLayout::LAP_VALUE_H,
@@ -1187,13 +1216,16 @@ public:
 
 		const bool absOn = isActiveValue(absActive);
 		const bool tcsOn = isActiveValue(tcActive);
+		uint16_t leftColor = TFT_WHITE;
+		if (tyrePressureFrontLeft != "--" && tyrePressureFrontLeft.toFloat() <= 1.0f)
+			leftColor = TFT_RED;
 		String lapCounterDisplay = tyrePressureRearLeft;
 		lapCounterDisplay.replace("/", " / ");
 		drawFuelIndicator(DashboardLayout::BOTTOM_X[0] + 4, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[0] - 8, DashboardLayout::BOTTOM_VALUE_H, brakeBias, forceUpdate);
 		drawDashboardValue(DashboardLayout::BOTTOM_X[1] + 2, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[1] - 4, DashboardLayout::BOTTOM_VALUE_H,
-			tyrePressureFrontLeft, "gt3Left", TFT_WHITE, &fonts::FreeSans12pt7b,
+			tyrePressureFrontLeft, "gt3Left", leftColor, &fonts::FreeSans12pt7b,
 			MC_DATUM, forceUpdate, 0.82f, 0.80f);
 		drawDashboardValue(DashboardLayout::BOTTOM_X[2] + 2, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[2] - 4, DashboardLayout::BOTTOM_VALUE_H,
@@ -1439,10 +1471,17 @@ public:
 		const String &value, bool forceUpdate)
 	{
 		const String id = "gt3Fuel";
-		if (!forceUpdate && prevData[id] == value) return;
+		uint16_t color = TFT_WHITE;
+		if (value != "--")
+		{
+			const float fuelPercent = value.toFloat();
+			if (fuelPercent <= 9.0f) color = TFT_RED;
+			else if (fuelPercent <= 24.0f) color = TFT_YELLOW;
+		}
+		const String state = value + ":" + String(color);
+		if (!forceUpdate && prevData[id] == state) return;
 
 		tft.fillRect(x, y, width, height, TFT_BLACK);
-		const uint16_t color = TFT_WHITE;
 		const int32_t pumpX = x + 2;
 		const int32_t pumpHeight = 18;
 		const int32_t pumpY = y + (height - pumpHeight) / 2 - 1;
@@ -1459,7 +1498,7 @@ public:
 		const int32_t valueWidth = width - 16;
 		drawMeasuredText(value, valueX, y, valueWidth, height,
 			&fonts::FreeSans12pt7b, color, MC_DATUM, 0.70f, 0.80f);
-		prevData[id] = value;
+		prevData[id] = state;
 	}
 
 	void drawCompactStatus(int32_t x, int32_t y, int32_t width, int32_t height,
@@ -1472,6 +1511,53 @@ public:
 		const int32_t centerY = y + (height - 1) / 2 - 2;
 		tft.drawCircle(x + width / 2, centerY, 7, color);
 		if (active) tft.fillCircle(x + width / 2, centerY, 4, color);
+		prevData[id] = state;
+	}
+
+	void drawPedalProgress(int32_t x, int32_t y, int32_t width, int32_t height,
+		int inputPercent, int appliedPercent, const String &id,
+		uint16_t appliedColor, bool forceUpdate)
+	{
+		inputPercent = constrain(inputPercent, 0, 100);
+		appliedPercent = constrain(appliedPercent, 0, 100);
+		const String state = String(inputPercent) + ":" + String(appliedPercent);
+		if (!forceUpdate && prevData[id] == state) return;
+
+		const int innerWidth = width - 2;
+		const int innerHeight = height - 2;
+		const int inputFill = (inputPercent * innerHeight + 99) / 100;
+		const int appliedFill = (appliedPercent * innerHeight + 99) / 100;
+		const uint16_t inputColor = tft.color565(180, 62, 66);
+
+		// Compose the complete 17x25 bar off-screen and push it once. This prevents
+		// the clear/background/foreground stages being visible on the SPI panel.
+		static LGFX_Sprite pedalSprite(&tft);
+		static bool pedalSpriteCreated = false;
+		if (!pedalSpriteCreated)
+		{
+			pedalSprite.setColorDepth(16);
+			pedalSprite.createSprite(DashboardLayout::PEDAL_BAR_W,
+				DashboardLayout::PEDAL_BAR_H);
+			pedalSpriteCreated = true;
+		}
+
+		pedalSprite.fillSprite(TFT_BLACK);
+		if (inputPercent >= 100)
+			pedalSprite.fillRoundRect(0, 0, width, height,
+				DashboardLayout::TYRE_CORNER_RADIUS, inputColor);
+		else if (inputFill > 0)
+			pedalSprite.fillRect(1, 1 + innerHeight - inputFill,
+				innerWidth, inputFill, inputColor);
+		if (appliedPercent >= 100)
+			pedalSprite.fillRoundRect(0, 0, width, height,
+				DashboardLayout::TYRE_CORNER_RADIUS, appliedColor);
+		else if (appliedFill > 0)
+			pedalSprite.fillRect(1, 1 + innerHeight - appliedFill,
+				innerWidth, appliedFill, appliedColor);
+		pedalSprite.drawRoundRect(0, 0, width, height,
+			DashboardLayout::TYRE_CORNER_RADIUS, tft.color565(82, 86, 92));
+		pedalSprite.pushSprite(x, y);
+
 		prevData[id] = state;
 	}
 
@@ -2141,7 +2227,7 @@ public:
 				blockY,
 				currentWidth,
 				currentHeight,
-				2,
+				DashboardLayout::TYRE_CORNER_RADIUS,
 				color);
 
 			prevColor[colorId] = color;
