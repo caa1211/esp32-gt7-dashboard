@@ -30,6 +30,100 @@ static const int HALF_CELL_HEIGHT = CELL_HEIGHT / 2;
 static const int COL[] = {0, CELL_WIDTH, CELL_WIDTH * 2, CELL_WIDTH * 3, CELL_WIDTH * 4, CELL_WIDTH * 6, CELL_WIDTH * 7};
 static const int ROW[] = {0, CELL_HEIGHT, CELL_HEIGHT * 2, CELL_HEIGHT * 3, CELL_HEIGHT * 4, CELL_HEIGHT * 6, CELL_HEIGHT * 7};
 
+// Explicit 320x240 dashboard grid. The side regions are mirror images and all
+// central elements derive from CENTER_X; no center alignment depends on them.
+namespace DashboardLayout
+{
+	static constexpr int WIDTH = 320;
+	static constexpr int HEIGHT = 240;
+	static constexpr int CENTER_X = 160;
+	static constexpr int OUTER_MARGIN = 4;
+	static constexpr int SIDE_COLUMN_WIDTH = 100;
+	static constexpr int SIDE_WIDTH = SIDE_COLUMN_WIDTH - OUTER_MARGIN * 2;
+	static constexpr int LEFT_X = OUTER_MARGIN;
+	static constexpr int RIGHT_X = WIDTH - SIDE_COLUMN_WIDTH + OUTER_MARGIN;
+	static constexpr int LEFT_DIVIDER_X = SIDE_COLUMN_WIDTH;
+	static constexpr int RIGHT_DIVIDER_X = WIDTH - SIDE_COLUMN_WIDTH;
+	static constexpr int INNER_PADDING = 1;
+	static constexpr int LEFT_TEXT_X = LEFT_X + INNER_PADDING;
+	static constexpr int RIGHT_TEXT_X = RIGHT_X + INNER_PADDING;
+
+	static constexpr int RPM_BOTTOM = 48;
+	static constexpr int CONTENT_TOP = 50;
+	static constexpr int CONTENT_BOTTOM = 192;
+	static constexpr int BOTTOM_DIVIDER_Y = 193;
+	static constexpr int SIDE_PANEL_Y = CONTENT_TOP;
+	static constexpr int SIDE_PANEL_H = CONTENT_BOTTOM - CONTENT_TOP + 1;
+	static constexpr int LEFT_PANEL_X = 2;
+	static constexpr int RIGHT_PANEL_X = RIGHT_DIVIDER_X + 1;
+	static constexpr int LEFT_PANEL_W = LEFT_DIVIDER_X - LEFT_PANEL_X - 1;
+	static constexpr int RIGHT_PANEL_W = WIDTH - RIGHT_PANEL_X - 2;
+	static constexpr int BOTTOM_PANEL_X = 2;
+	static constexpr int BOTTOM_PANEL_Y = 194;
+	static constexpr int BOTTOM_PANEL_W = WIDTH - 4;
+	static constexpr int BOTTOM_PANEL_H = HEIGHT - BOTTOM_PANEL_Y - 2;
+
+	static constexpr int GEAR_CENTER_X = CENTER_X;
+	static constexpr int GEAR_CENTER_Y = 108;
+	static constexpr int GEAR_RADIUS = 53;
+	static constexpr int GEAR_VALUE_W = 104;
+	static constexpr int GEAR_VALUE_H = 100;
+	static constexpr int GEAR_VALUE_X = GEAR_CENTER_X - GEAR_VALUE_W / 2;
+	static constexpr int GEAR_VALUE_Y = GEAR_CENTER_Y - GEAR_VALUE_H / 2;
+
+	static constexpr int TYRE_W = 69;
+	static constexpr int TYRE_H = 25;
+	static constexpr int TYRE_CORNER_RADIUS = 2;
+	static constexpr int TYRE_X = CENTER_X - TYRE_W / 2;
+	static constexpr int TYRE_Y = 164;
+	static constexpr int PEDAL_BAR_W = 13;
+	static constexpr int PEDAL_BAR_H = TYRE_H + 1;
+	static constexpr int PEDAL_BAR_Y = TYRE_Y;
+	// Centre each pedal bar in the free space between the tyre cluster and side panels.
+	// Mirrored placement keeps both bar centres symmetric around screen X=160.
+	// Preserve the previous bar centre while narrowing from 17 to 13 pixels.
+	static constexpr int BRAKE_BAR_X = 106;
+	static constexpr int THROTTLE_BAR_X = WIDTH - BRAKE_BAR_X - PEDAL_BAR_W;
+
+	static constexpr int SPEED_LABEL_Y = 52;
+	static constexpr int SPEED_VALUE_Y = 70;
+	static constexpr int SPEED_VALUE_H = 43;
+	static constexpr int SPEED_UNIT_Y = 114;
+	static constexpr int LEFT_SEPARATOR_Y = 126;
+	static constexpr int DELTA_LABEL_Y = 131;
+	static constexpr int DELTA_VALUE_Y = 150;
+	static constexpr int DELTA_VALUE_H = 38;
+
+	static constexpr int LAP_LABEL_Y[3] = {52, 99, 146};
+	static constexpr int LAP_VALUE_Y[3] = {70, 117, 164};
+	static constexpr int LAP_SEPARATOR_Y[2] = {95, 142};
+	static constexpr int LAP_VALUE_H = 24;
+
+	static constexpr int BOTTOM_LABEL_Y = 196;
+	static constexpr int BOTTOM_VALUE_Y = 214;
+	// Keep dynamic clears above the panel's bottom border at y=237.
+	static constexpr int BOTTOM_VALUE_H = 22;
+	static constexpr int BOTTOM_LINE_TOP = 196;
+	static constexpr int BOTTOM_LINE_H = 42;
+	// Three cells per half; BOTTOM_X[3] is the exact dashboard center divider.
+	static constexpr int BOTTOM_X[6] = {0, 56, 108, CENTER_X, 205, 262};
+	static constexpr int BOTTOM_W[6] = {56, 52, 52, 45, 57, 58};
+
+	static constexpr int RPM_SEGMENTS = 32;
+	static constexpr int RPM_SEGMENT_PITCH = 10;
+	static constexpr int RPM_SEGMENT_X = 1;
+	static constexpr int RPM_SEGMENT_W = 8;
+	static constexpr int RPM_SEGMENT_THICKNESS = 10;
+	static constexpr int RPM_LABEL_LEFT_X = 8;
+	static constexpr int RPM_LABEL_RIGHT_X = WIDTH - RPM_LABEL_LEFT_X;
+}
+
+// Keep the previous five-column dashboard available for A/B testing.
+// Set to 1 in the build flags to restore it without reverting this file.
+#ifndef GT7_DASHBOARD_LEGACY_UI
+#define GT7_DASHBOARD_LEGACY_UI 0
+#endif
+
 std::map<String, String> prevData;
 std::map<String, int32_t> prevColor;
 
@@ -112,8 +206,10 @@ private:
 	String tyrePressureRearLeft = "00.0";
 	String fuelAlertActive = "False";
 	String tcLevel = "0";
+	String tcFilteredLevel = "0";
 	String tcActive = "0";
 	String absLevel = "0";
+	String absFilteredLevel = "0";
 	String absActive = "0";
 	String isTCCutNull = "True";
 	String tcTcCut = "0  0";
@@ -429,7 +525,9 @@ public:
 				100.0f);
 		}
 
-		brakeBias = String(fuelPercent, 0);
+		brakeBias = data.fuelCapacity > 0.0f
+			? String(fuelPercent, 0)
+			: "--";
 		fuelAlertActive = String(fuelPercent, 1);
 
 		for (int tyreIndex = 0; tyreIndex < 4; tyreIndex++)
@@ -464,6 +562,12 @@ public:
 
 		tcLevel = String(throttlePercent);
 		absLevel = String(brakePercent);
+		// GT7 exposes both driver pedal position and the filtered output actually
+		// applied by the simulation (after traction/ABS intervention).
+		tcFilteredLevel = String(constrain(
+			static_cast<int>(data.throttleFiltered * 100.0f / 255.0f), 0, 100));
+		absFilteredLevel = String(constrain(
+			static_cast<int>(data.brakeFiltered * 100.0f / 255.0f), 0, 100));
 
 		const uint16_t flags = static_cast<uint16_t>(data.flags);
 
@@ -549,6 +653,10 @@ public:
 		// 16：煞車百分比
 		absLevel =
 			FlowSerialReadStringUntil(';');
+		// SimHub's existing protocol has no separate filtered pedal channels.
+		// Mirror the input so the dual-layer renderer remains backward compatible.
+		tcFilteredLevel = tcLevel;
+		absFilteredLevel = absLevel;
 
 		// 17：ABS 是否介入
 		absActive =
@@ -780,7 +888,11 @@ public:
 
 		if (currentPage == 1)
 		{
+			#if GT7_DASHBOARD_LEGACY_UI
+			drawPage1Legacy(forceUpdate);
+			#else
 			drawPage1(forceUpdate);
+			#endif
 		}
 		else if (forceUpdate)
 		{
@@ -1004,6 +1116,519 @@ public:
 	}
 
 	void drawPage1(bool forceUpdate = false)
+	{
+		static LGFX_Sprite speedSprite(&tft);
+		static LGFX_Sprite currentLapSprite(&tft);
+		static LGFX_Sprite gearSprite(&tft);
+		static bool speedSpriteCreated = false;
+		static bool currentLapSpriteCreated = false;
+		static bool gearSpriteCreated = false;
+		const uint16_t panelLine = tft.color565(82, 86, 92);
+		const uint16_t labelColor = tft.color565(155, 158, 162);
+
+		if (forceUpdate)
+		{
+			tft.fillScreen(TFT_BLACK);
+			tft.setTextPadding(0);
+			tft.setTextDatum(TL_DATUM);
+
+			// Three restrained panel outlines match the target dashboard grouping.
+			tft.drawRoundRect(DashboardLayout::LEFT_PANEL_X, DashboardLayout::SIDE_PANEL_Y,
+				DashboardLayout::LEFT_PANEL_W, DashboardLayout::SIDE_PANEL_H, 5, panelLine);
+			tft.drawRoundRect(DashboardLayout::RIGHT_PANEL_X, DashboardLayout::SIDE_PANEL_Y,
+				DashboardLayout::RIGHT_PANEL_W, DashboardLayout::SIDE_PANEL_H, 5, panelLine);
+			tft.drawRoundRect(DashboardLayout::BOTTOM_PANEL_X, DashboardLayout::BOTTOM_PANEL_Y,
+				DashboardLayout::BOTTOM_PANEL_W, DashboardLayout::BOTTOM_PANEL_H, 5, panelLine);
+			tft.drawFastHLine(DashboardLayout::LEFT_TEXT_X, DashboardLayout::LEFT_SEPARATOR_Y,
+				DashboardLayout::SIDE_WIDTH - 3, panelLine);
+			for (int i = 0; i < 2; ++i)
+				tft.drawFastHLine(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_SEPARATOR_Y[i],
+					DashboardLayout::SIDE_WIDTH - 2, panelLine);
+
+			drawMeasuredText("SPEED", DashboardLayout::LEFT_TEXT_X,
+				DashboardLayout::SPEED_LABEL_Y, DashboardLayout::SIDE_WIDTH, 18,
+				&fonts::FreeSans9pt7b, labelColor, ML_DATUM, 0.72f, 0.74f);
+			drawMeasuredText("km/h", DashboardLayout::LEFT_X,
+				DashboardLayout::SPEED_UNIT_Y, DashboardLayout::SIDE_WIDTH - 5, 13,
+				&fonts::FreeSans9pt7b, labelColor, MR_DATUM, 0.62f, 0.64f);
+			drawMeasuredText("DELTA", DashboardLayout::LEFT_TEXT_X,
+				DashboardLayout::DELTA_LABEL_Y, DashboardLayout::SIDE_WIDTH, 18,
+				&fonts::FreeSans9pt7b, labelColor, ML_DATUM, 0.72f, 0.74f);
+			const char *lapLabels[] = {"BEST", "LAST", "CURRENT"};
+			for (int i = 0; i < 3; ++i)
+				drawMeasuredText(lapLabels[i], DashboardLayout::RIGHT_TEXT_X,
+					DashboardLayout::LAP_LABEL_Y[i], DashboardLayout::SIDE_WIDTH, 18,
+					&fonts::FreeSans9pt7b, labelColor, ML_DATUM, 0.72f, 0.74f);
+
+			const char *bottomLabels[] = {"FUEL", "LEFT", "LAP", "POS", "ABS", "TCS"};
+			for (int i = 0; i < 6; ++i)
+			{
+				if (i > 0) tft.drawFastVLine(DashboardLayout::BOTTOM_X[i],
+					DashboardLayout::BOTTOM_LINE_TOP, DashboardLayout::BOTTOM_LINE_H, panelLine);
+				drawMeasuredText(bottomLabels[i], DashboardLayout::BOTTOM_X[i],
+					DashboardLayout::BOTTOM_LABEL_Y, DashboardLayout::BOTTOM_W[i], 17,
+					&fonts::FreeSans9pt7b, labelColor, MC_DATUM, 0.70f, 0.72f);
+			}
+			tft.setTextDatum(TL_DATUM);
+		}
+
+		drawRpmMeterGT3(forceUpdate);
+		drawDashboardValueBuffered(DashboardLayout::LEFT_X, DashboardLayout::SPEED_VALUE_Y,
+			DashboardLayout::SIDE_WIDTH, DashboardLayout::SPEED_VALUE_H,
+			speed, "gt3Speed", TFT_WHITE, &fonts::DejaVu56,
+			MC_DATUM, forceUpdate, speedSprite, speedSpriteCreated, 0.72f, 0.72f);
+
+		uint16_t deltaColor = TFT_WHITE;
+		if (sessionBestLiveDeltaSeconds.startsWith("-")) deltaColor = TFT_GREEN;
+		else if (sessionBestLiveDeltaSeconds.startsWith("+") && sessionBestLiveDeltaSeconds != "+0.000") deltaColor = TFT_RED;
+		drawDashboardValue(DashboardLayout::LEFT_X, DashboardLayout::DELTA_VALUE_Y,
+			DashboardLayout::SIDE_WIDTH, DashboardLayout::DELTA_VALUE_H,
+			sessionBestLiveDeltaSeconds, "gt3Delta", deltaColor, &fonts::FreeSans18pt7b,
+			MC_DATUM, forceUpdate, 0.72f, 0.92f);
+
+		// The gear datum is tied to the physical screen center, independent of side columns.
+		drawCenteredGear(forceUpdate, gearSprite, gearSpriteCreated);
+		drawGearShiftArcs(forceUpdate);
+		drawTyreTemperatureStrip(DashboardLayout::TYRE_X, DashboardLayout::TYRE_Y,
+			DashboardLayout::TYRE_W, DashboardLayout::TYRE_H, forceUpdate, 1);
+		drawPedalProgress(DashboardLayout::BRAKE_BAR_X, DashboardLayout::PEDAL_BAR_Y,
+			DashboardLayout::PEDAL_BAR_W, DashboardLayout::PEDAL_BAR_H,
+			absLevel.toInt(), absFilteredLevel.toInt(), "gt3BrakeBar",
+			tft.color565(218, 220, 224), forceUpdate);
+		drawPedalProgress(DashboardLayout::THROTTLE_BAR_X, DashboardLayout::PEDAL_BAR_Y,
+			DashboardLayout::PEDAL_BAR_W, DashboardLayout::PEDAL_BAR_H,
+			tcLevel.toInt(), tcFilteredLevel.toInt(), "gt3ThrottleBar",
+			tft.color565(218, 220, 224), forceUpdate);
+
+		drawDashboardValue(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_VALUE_Y[0],
+			DashboardLayout::SIDE_WIDTH - DashboardLayout::INNER_PADDING, DashboardLayout::LAP_VALUE_H,
+			bestLapTime, "gt3Best", TFT_WHITE, &fonts::FreeSans12pt7b,
+			MC_DATUM, forceUpdate, 0.72f, 0.90f);
+		drawDashboardValue(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_VALUE_Y[1],
+			DashboardLayout::SIDE_WIDTH - DashboardLayout::INNER_PADDING, DashboardLayout::LAP_VALUE_H,
+			lastLapTime, "gt3Last", TFT_WHITE, &fonts::FreeSans12pt7b,
+			MC_DATUM, forceUpdate, 0.72f, 0.90f);
+		drawDashboardValueBuffered(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_VALUE_Y[2],
+			DashboardLayout::SIDE_WIDTH - DashboardLayout::INNER_PADDING, DashboardLayout::LAP_VALUE_H,
+			currentLapTime, "gt3Current",
+			lapInvalidated == "True" ? TFT_RED : TFT_WHITE, &fonts::FreeSans12pt7b,
+			MC_DATUM, forceUpdate, currentLapSprite, currentLapSpriteCreated, 0.72f, 0.90f);
+
+		const bool absOn = isActiveValue(absActive);
+		const bool tcsOn = isActiveValue(tcActive);
+		uint16_t leftColor = TFT_WHITE;
+		if (tyrePressureFrontLeft != "--" && tyrePressureFrontLeft.toFloat() <= 1.0f)
+			leftColor = TFT_RED;
+		String lapCounterDisplay = tyrePressureRearLeft;
+		lapCounterDisplay.replace("/", " / ");
+		drawFuelIndicator(DashboardLayout::BOTTOM_X[0] + 4, DashboardLayout::BOTTOM_VALUE_Y,
+			DashboardLayout::BOTTOM_W[0] - 8, DashboardLayout::BOTTOM_VALUE_H, brakeBias, forceUpdate);
+		drawDashboardValue(DashboardLayout::BOTTOM_X[1] + 2, DashboardLayout::BOTTOM_VALUE_Y,
+			DashboardLayout::BOTTOM_W[1] - 4, DashboardLayout::BOTTOM_VALUE_H,
+			tyrePressureFrontLeft, "gt3Left", leftColor, &fonts::FreeSans12pt7b,
+			MC_DATUM, forceUpdate, 0.82f, 0.80f);
+		drawDashboardValue(DashboardLayout::BOTTOM_X[2] + 2, DashboardLayout::BOTTOM_VALUE_Y,
+			DashboardLayout::BOTTOM_W[2] - 4, DashboardLayout::BOTTOM_VALUE_H,
+			lapCounterDisplay, "gt3Lap", TFT_WHITE, &fonts::FreeSans12pt7b,
+			MC_DATUM, forceUpdate, 0.56f, 0.74f);
+		drawDashboardValue(DashboardLayout::BOTTOM_X[3] + 2, DashboardLayout::BOTTOM_VALUE_Y,
+			DashboardLayout::BOTTOM_W[3] - 4, DashboardLayout::BOTTOM_VALUE_H,
+			tyrePressureFrontRight, "gt3Pos", tft.color565(160, 60, 255), &fonts::FreeSans12pt7b,
+			MC_DATUM, forceUpdate, 0.82f, 0.80f);
+		drawCompactStatus(DashboardLayout::BOTTOM_X[4] + 2, DashboardLayout::BOTTOM_VALUE_Y,
+			DashboardLayout::BOTTOM_W[4] - 4, DashboardLayout::BOTTOM_VALUE_H,
+			"gt3Abs", absOn, tft.color565(57, 255, 20), forceUpdate);
+		drawCompactStatus(DashboardLayout::BOTTOM_X[5] + 2, DashboardLayout::BOTTOM_VALUE_Y,
+			DashboardLayout::BOTTOM_W[5] - 6, DashboardLayout::BOTTOM_VALUE_H,
+			"gt3Tcs", tcsOn, tft.color565(0, 200, 255), forceUpdate);
+	}
+
+	void drawMeasuredText(const String &value, int32_t x, int32_t y,
+		int32_t width, int32_t height, const lgfx::IFont *font, uint16_t color,
+		textdatum_t datum, float scaleX = 1.0f, float scaleY = 1.0f)
+	{
+		tft.setTextPadding(0);
+		tft.setTextColor(color, TFT_BLACK);
+		tft.setTextSize(scaleX, scaleY);
+		tft.setFont(font);
+
+		const int32_t measuredWidth = tft.textWidth(value);
+		const int32_t measuredHeight = tft.fontHeight();
+		int32_t drawX = x;
+		if (datum == MC_DATUM || datum == TC_DATUM || datum == BC_DATUM)
+			drawX = x + (width - measuredWidth) / 2;
+		else if (datum == MR_DATUM || datum == TR_DATUM || datum == BR_DATUM)
+			drawX = x + width - measuredWidth;
+
+		const int32_t drawY = y + (height - measuredHeight) / 2;
+		tft.setTextDatum(TL_DATUM);
+		tft.drawString(value, drawX, drawY);
+		tft.setFont(&fonts::Font0);
+		tft.setTextSize(1.0f);
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	void drawGearGaugeArcs(uint16_t color)
+	{
+		const int radiusOuter = DashboardLayout::GEAR_RADIUS;
+		const int angleStep = 2;
+
+		auto drawOneArc = [&](int startAngle, int endAngle, int radius)
+		{
+			float previousRadians = startAngle * DEG_TO_RAD;
+			int previousX = DashboardLayout::GEAR_CENTER_X + lroundf(cosf(previousRadians) * radius);
+			int previousY = DashboardLayout::GEAR_CENTER_Y + lroundf(sinf(previousRadians) * radius);
+			for (int angle = startAngle + angleStep; angle <= endAngle; angle += angleStep)
+			{
+				const float radians = angle * DEG_TO_RAD;
+				const int currentX = DashboardLayout::GEAR_CENTER_X + lroundf(cosf(radians) * radius);
+				const int currentY = DashboardLayout::GEAR_CENTER_Y + lroundf(sinf(radians) * radius);
+				tft.drawLine(previousX, previousY, currentX, currentY, color);
+				previousX = currentX;
+				previousY = currentY;
+			}
+		};
+
+		// Equal 44-degree openings at twelve and six o'clock.
+		// Two closely spaced traces create a smooth, readable gauge outline
+		// without turning it into a heavy four-pixel bracket.
+		for (int radius = radiusOuter; radius >= radiusOuter - 1; --radius)
+		{
+			drawOneArc(-68, 68, radius);
+			drawOneArc(112, 248, radius);
+		}
+	}
+
+	void drawGearShiftArcs(bool forceUpdate)
+	{
+		const String id = "gt3GearArcs";
+		if (!forceUpdate && prevData[id] == gear) return;
+
+		const int gearNumber = gear.toInt();
+		const int radius = 54;
+		const int segmentSweep = 18;
+		const int segmentStep = 29;
+		const uint16_t currentGearColor = tft.color565(72, 76, 82);
+		const uint16_t otherGearColor = tft.color565(218, 220, 224);
+
+		auto drawArcSegment = [&](int startAngle, int endAngle, uint16_t color)
+		{
+			for (int thickness = 0; thickness < 3; ++thickness)
+			{
+				const int r = radius - thickness;
+				float previousRadians = startAngle * DEG_TO_RAD;
+				int previousX = DashboardLayout::GEAR_CENTER_X + lroundf(cosf(previousRadians) * r);
+				int previousY = DashboardLayout::GEAR_CENTER_Y + lroundf(sinf(previousRadians) * r);
+				for (int angle = startAngle + 2; angle <= endAngle; angle += 2)
+				{
+					const float radians = angle * DEG_TO_RAD;
+					const int currentX = DashboardLayout::GEAR_CENTER_X + lroundf(cosf(radians) * r);
+					const int currentY = DashboardLayout::GEAR_CENTER_Y + lroundf(sinf(radians) * r);
+					tft.drawLine(previousX, previousY, currentX, currentY, color);
+					previousX = currentX;
+					previousY = currentY;
+				}
+			}
+		};
+
+		// Segment zero starts at the bottom; higher gears illuminate upward.
+		for (int segment = 0; segment < 4; ++segment)
+		{
+			const int rightStart = 34 - segment * segmentStep;
+			const int rightEnd = rightStart + segmentSweep;
+			const bool marksCurrentGear = gearNumber >= 1 && gearNumber <= 4 &&
+				segment == gearNumber - 1;
+			const uint16_t color = marksCurrentGear ? currentGearColor : otherGearColor;
+			drawArcSegment(rightStart, rightEnd, color);
+			drawArcSegment(180 - rightEnd, 180 - rightStart, color);
+		}
+
+		prevData[id] = gear;
+	}
+
+	void drawDashboardValue(int32_t x, int32_t y, int32_t width, int32_t height,
+		const String &value, const String &id, uint16_t color, const lgfx::IFont *font,
+		textdatum_t datum, bool forceUpdate, float scaleX = 1.0f, float scaleY = 1.0f)
+	{
+		if (!forceUpdate && prevData[id] == value && prevColor[id] == color) return;
+		tft.fillRect(x, y, width, height, TFT_BLACK);
+		drawMeasuredText(value, x, y, width, height, font, color, datum, scaleX, scaleY);
+		prevData[id] = value;
+		prevColor[id] = color;
+	}
+
+	void drawDashboardValueBuffered(int32_t x, int32_t y, int32_t width, int32_t height,
+		const String &value, const String &id, uint16_t color, const lgfx::IFont *font,
+		textdatum_t datum, bool forceUpdate, LGFX_Sprite &sprite, bool &spriteCreated,
+		float scaleX = 1.0f, float scaleY = 1.0f)
+	{
+		if (!forceUpdate && prevData[id] == value && prevColor[id] == color) return;
+
+		if (!spriteCreated)
+		{
+			sprite.setColorDepth(16);
+			spriteCreated = sprite.createSprite(width, height) != nullptr;
+		}
+
+		// Fall back safely if heap fragmentation prevents this small allocation.
+		if (!spriteCreated)
+		{
+			drawDashboardValue(x, y, width, height, value, id, color, font,
+				datum, forceUpdate, scaleX, scaleY);
+			return;
+		}
+
+		sprite.fillSprite(TFT_BLACK);
+		sprite.setTextPadding(0);
+		sprite.setTextColor(color, TFT_BLACK);
+		sprite.setTextSize(scaleX, scaleY);
+		sprite.setFont(font);
+
+		const int32_t measuredWidth = sprite.textWidth(value);
+		const int32_t measuredHeight = sprite.fontHeight();
+		int32_t drawX = 0;
+		if (datum == MC_DATUM || datum == TC_DATUM || datum == BC_DATUM)
+			drawX = (width - measuredWidth) / 2;
+		else if (datum == MR_DATUM || datum == TR_DATUM || datum == BR_DATUM)
+			drawX = width - measuredWidth;
+		const int32_t drawY = (height - measuredHeight) / 2;
+
+		sprite.setTextDatum(TL_DATUM);
+		sprite.drawString(value, drawX, drawY);
+		sprite.pushSprite(x, y);
+		sprite.setFont(&fonts::Font0);
+		sprite.setTextSize(1.0f);
+
+		prevData[id] = value;
+		prevColor[id] = color;
+	}
+
+	void drawCenteredGear(bool forceUpdate, LGFX_Sprite &sprite, bool &spriteCreated)
+	{
+		const String id = "gt3Gear";
+		if (!forceUpdate && prevData[id] == gear) return;
+
+		const int width = DashboardLayout::GEAR_VALUE_W;
+		const int height = DashboardLayout::GEAR_VALUE_H;
+		if (!spriteCreated)
+		{
+			sprite.setColorDepth(16);
+			spriteCreated = sprite.createSprite(width, height) != nullptr;
+		}
+
+		if (!spriteCreated)
+		{
+			drawDashboardValue(DashboardLayout::GEAR_VALUE_X, DashboardLayout::GEAR_VALUE_Y,
+				width, height, gear, id, TFT_WHITE, &fonts::DejaVu72,
+				MC_DATUM, forceUpdate, 1.25f, 1.25f);
+			return;
+		}
+
+		sprite.setTextPadding(0);
+		sprite.setTextColor(TFT_WHITE, TFT_BLACK);
+		sprite.setTextSize(1.25f, 1.25f);
+		sprite.setFont(&fonts::DejaVu72);
+		sprite.setTextDatum(TL_DATUM);
+
+		const int initialX = (width - sprite.textWidth(gear)) / 2;
+		const int initialY = (height - sprite.fontHeight()) / 2;
+		sprite.fillSprite(TFT_BLACK);
+		sprite.drawString(gear, initialX, initialY);
+
+		int minX = width;
+		int minY = height;
+		int maxX = -1;
+		int maxY = -1;
+		for (int py = 0; py < height; ++py)
+		{
+			for (int px = 0; px < width; ++px)
+			{
+				if (sprite.readPixel(px, py) == TFT_BLACK) continue;
+				minX = min(minX, px);
+				maxX = max(maxX, px);
+				minY = min(minY, py);
+				maxY = max(maxY, py);
+			}
+		}
+
+		int correctedX = initialX;
+		int correctedY = initialY;
+		if (maxX >= minX && maxY >= minY)
+		{
+			correctedX += (width - 1 - minX - maxX) / 2;
+			correctedY += (height - 1 - minY - maxY) / 2;
+		}
+
+		sprite.fillSprite(TFT_BLACK);
+		sprite.drawString(gear, correctedX, correctedY);
+		sprite.pushSprite(DashboardLayout::GEAR_VALUE_X, DashboardLayout::GEAR_VALUE_Y);
+		sprite.setFont(&fonts::Font0);
+		sprite.setTextSize(1.0f);
+		prevData[id] = gear;
+	}
+
+	void drawFuelIndicator(int32_t x, int32_t y, int32_t width, int32_t height,
+		const String &value, bool forceUpdate)
+	{
+		const String id = "gt3Fuel";
+		uint16_t color = TFT_WHITE;
+		if (value != "--")
+		{
+			const float fuelPercent = value.toFloat();
+			if (fuelPercent <= 9.0f) color = TFT_RED;
+			else if (fuelPercent <= 24.0f) color = TFT_YELLOW;
+		}
+		const String state = value + ":" + String(color);
+		if (!forceUpdate && prevData[id] == state) return;
+
+		tft.fillRect(x, y, width, height, TFT_BLACK);
+		const int32_t pumpX = x + 2;
+		const int32_t pumpHeight = 18;
+		const int32_t pumpY = y + (height - pumpHeight) / 2 - 1;
+
+		// Allocation-free monochrome fuel pump: body, window, base and hose.
+		tft.drawRect(pumpX, pumpY, 8, 13, color);
+		tft.drawRect(pumpX + 2, pumpY + 2, 4, 4, color);
+		tft.drawFastHLine(pumpX - 1, pumpY + 17, 11, color);
+		tft.drawFastVLine(pumpX + 10, pumpY + 4, 8, color);
+		tft.drawLine(pumpX + 7, pumpY + 2, pumpX + 10, pumpY + 5, color);
+		tft.drawLine(pumpX + 10, pumpY + 12, pumpX + 12, pumpY + 15, color);
+
+		const int32_t valueX = x + 16;
+		const int32_t valueWidth = width - 16;
+		drawMeasuredText(value, valueX, y, valueWidth, height,
+			&fonts::FreeSans12pt7b, color, MC_DATUM, 0.70f, 0.80f);
+		prevData[id] = state;
+	}
+
+	void drawCompactStatus(int32_t x, int32_t y, int32_t width, int32_t height,
+		const String &id, bool active, uint16_t activeColor, bool forceUpdate)
+	{
+		const String state = active ? "1" : "0";
+		if (!forceUpdate && prevData[id] == state) return;
+		tft.fillRect(x, y, width, height, TFT_BLACK);
+		const uint16_t color = activeColor;
+		const int32_t centerY = y + (height - 1) / 2 - 2;
+		tft.drawCircle(x + width / 2, centerY, 7, color);
+		if (active) tft.fillCircle(x + width / 2, centerY, 4, color);
+		prevData[id] = state;
+	}
+
+	void drawPedalProgress(int32_t x, int32_t y, int32_t width, int32_t height,
+		int inputPercent, int appliedPercent, const String &id,
+		uint16_t appliedColor, bool forceUpdate)
+	{
+		inputPercent = constrain(inputPercent, 0, 100);
+		appliedPercent = constrain(appliedPercent, 0, 100);
+		const String state = String(inputPercent) + ":" + String(appliedPercent);
+		if (!forceUpdate && prevData[id] == state) return;
+
+		const int innerWidth = width - 2;
+		const int innerHeight = height - 2;
+		const int inputFill = (inputPercent * innerHeight + 99) / 100;
+		const int appliedFill = (appliedPercent * innerHeight + 99) / 100;
+		const uint16_t inputColor = tft.color565(180, 62, 66);
+
+		// Compose the complete 17x25 bar off-screen and push it once. This prevents
+		// the clear/background/foreground stages being visible on the SPI panel.
+		static LGFX_Sprite pedalSprite(&tft);
+		static bool pedalSpriteCreated = false;
+		if (!pedalSpriteCreated)
+		{
+			pedalSprite.setColorDepth(16);
+			pedalSprite.createSprite(DashboardLayout::PEDAL_BAR_W,
+				DashboardLayout::PEDAL_BAR_H);
+			pedalSpriteCreated = true;
+		}
+
+		pedalSprite.fillSprite(TFT_BLACK);
+		if (inputPercent >= 100)
+			pedalSprite.fillRoundRect(0, 0, width, height,
+				DashboardLayout::TYRE_CORNER_RADIUS, inputColor);
+		else if (inputFill > 0)
+			pedalSprite.fillRect(1, 1 + innerHeight - inputFill,
+				innerWidth, inputFill, inputColor);
+		if (appliedPercent >= 100)
+			pedalSprite.fillRoundRect(0, 0, width, height,
+				DashboardLayout::TYRE_CORNER_RADIUS, appliedColor);
+		else if (appliedFill > 0)
+			pedalSprite.fillRect(1, 1 + innerHeight - appliedFill,
+				innerWidth, appliedFill, appliedColor);
+		pedalSprite.drawRoundRect(0, 0, width, height,
+			DashboardLayout::TYRE_CORNER_RADIUS, tft.color565(82, 86, 92));
+		pedalSprite.pushSprite(x, y);
+
+		prevData[id] = state;
+	}
+
+	void drawRpmMeterGT3(bool forceUpdate)
+	{
+		const int segmentCount = DashboardLayout::RPM_SEGMENTS;
+		const int active = constrain((rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
+		const int previous = forceUpdate ? -1 : constrain((prev_rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
+		const bool redlineChanged = prevData["gt3Redline"] != String(rpmRedLineSetting);
+		if (!forceUpdate && active == previous && !redlineChanged) return;
+		const int gradientStops[] = {0, 11, 20, 26, 31};
+		const uint8_t gradientRgb[][3] = {
+			{86, 90, 96}, {245, 245, 245}, {255, 220, 0},
+			{255, 118, 0}, {255, 20, 28}};
+
+		for (int i = 0; i < segmentCount; ++i)
+		{
+			if (!forceUpdate && !redlineChanged && i < min(active, previous)) continue;
+			if (!forceUpdate && !redlineChanged && i >= max(active, previous)) continue;
+			int stop = 0;
+			while (stop < 3 && i > gradientStops[stop + 1]) ++stop;
+			const int span = gradientStops[stop + 1] - gradientStops[stop];
+			const int offset = constrain(i - gradientStops[stop], 0, span);
+			int red = gradientRgb[stop][0] +
+				(gradientRgb[stop + 1][0] - gradientRgb[stop][0]) * offset / span;
+			int green = gradientRgb[stop][1] +
+				(gradientRgb[stop + 1][1] - gradientRgb[stop][1]) * offset / span;
+			int blue = gradientRgb[stop][2] +
+				(gradientRgb[stop + 1][2] - gradientRgb[stop][2]) * offset / span;
+			if (i >= active)
+			{
+				red /= 4;
+				green /= 4;
+				blue /= 4;
+			}
+			const uint16_t color = tft.color565(red, green, blue);
+			// A shallow parabola gives an inexpensive GT-style arc. Each segment is
+			// a four-point strip made from two filled triangles, with a 3 px gap.
+			const int x0 = DashboardLayout::RPM_SEGMENT_X + i * DashboardLayout::RPM_SEGMENT_PITCH;
+			const int x1 = x0 + DashboardLayout::RPM_SEGMENT_W;
+			const int dx0 = x0 - DashboardLayout::CENTER_X;
+			const int dx1 = x1 - DashboardLayout::CENTER_X;
+			const int y0 = 11 + (dx0 * dx0) / 1000;
+			const int y1 = 11 + (dx1 * dx1) / 1000;
+			const int thickness = DashboardLayout::RPM_SEGMENT_THICKNESS;
+			tft.fillTriangle(x0, y0, x1, y1, x0, y0 + thickness, color);
+			tft.fillTriangle(x1, y1, x1, y1 + thickness, x0, y0 + thickness, color);
+		}
+		if (forceUpdate)
+		{
+			const uint16_t rpmTextColor = tft.color565(160, 163, 168);
+			const char *labels[] = {"0", "2", "4", "6", "8", "10"};
+			for (int i = 0; i < 6; ++i)
+			{
+				const int labelX = DashboardLayout::RPM_LABEL_LEFT_X +
+					(DashboardLayout::RPM_LABEL_RIGHT_X - DashboardLayout::RPM_LABEL_LEFT_X) * i / 5;
+				const int dx = labelX - DashboardLayout::CENTER_X;
+				const int labelY = 1 + (dx * dx) / 1100;
+				drawMeasuredText(labels[i], labelX - 10, labelY, 20, 10,
+					&fonts::FreeSans9pt7b, rpmTextColor, MC_DATUM, 0.54f, 0.52f);
+			}
+
+			// Dedicated center caption band below the arc; it cannot overlap ticks.
+			drawMeasuredText("RPM x1000", DashboardLayout::CENTER_X - 55, 28, 110, 18,
+				&fonts::FreeSans9pt7b, rpmTextColor, MC_DATUM, 0.74f, 0.72f);
+		}
+		prev_rpmPercent = rpmPercent;
+		prevData["gt3Redline"] = String(rpmRedLineSetting);
+	}
+
+	void drawPage1Legacy(bool forceUpdate = false)
 	{
 		drawRpmMeter(0, 0, SCREEN_WIDTH, HALF_CELL_HEIGHT);
 		drawGear(COL[2], COL[1]);
@@ -1568,9 +2193,9 @@ public:
 		int32_t y,
 		int width,
 		int height,
-		bool forceUpdate = false)
+		bool forceUpdate = false,
+		uint8_t gap = 2)
 	{
-		const int gap = 2;
 		const int blockWidth = (width - gap) / 2;
 		const int blockHeight = (height - gap) / 2;
 		const String gearId = "tyreTemperatureGear";
@@ -1602,7 +2227,7 @@ public:
 				blockY,
 				currentWidth,
 				currentHeight,
-				2,
+				DashboardLayout::TYRE_CORNER_RADIUS,
 				color);
 
 			prevColor[colorId] = color;
