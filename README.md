@@ -62,7 +62,22 @@ Currently supported:
 - ESP32-2432S028 with 2.8" ST7789 touch display
 
 <p align="center">
-  <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
+  <img src="photos/esp32.jpg" width="900" alt="ESP32 GT7 Dashboard">
+</p>
+
+---
+
+## Firmware Versions
+
+The dashboard appearance differs between firmware versions:
+
+- **1.2.5** uses the original engineering-style dashboard layout.
+- **1.2.6** introduces the refined GT3-style dashboard with a centered gear display, curved segmented RPM bar, larger telemetry values, tyre-temperature blocks, and brake/throttle bars.
+
+Both versions are available for the supported ILI9341 and ST7789 display variants. Choose the version whose dashboard layout you prefer in the Web Installer.
+
+<p align="center">
+  <img src="photos/1.25and1.26_en.png" width="900" alt="Comparison of GT7 Dashboard firmware versions 1.2.5 and 1.2.6">
 </p>
 
 ---
