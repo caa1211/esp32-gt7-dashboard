@@ -149,7 +149,7 @@ No IP address configuration is required.
 
 - Turn the display on or off.
 
-**Press and Hold (3sec)**
+**Press and Hold (5 sec)**
 
 - Clear the saved Wi-Fi configuration.
 - Reboot into Wi-Fi setup mode.

@@ -193,6 +193,14 @@ private:
 	int rpmPercent = 50;
 	int prev_rpmPercent = 50;
 	int rpmRedLineSetting = 90;
+	int engineRpm = 0;
+	bool rpmAlertRangeValid = false;
+	bool revLimitAlertActive = false;
+	bool revLimitAlertWasActive = false;
+	bool rpmPulseWasActive = false;
+	uint8_t lastRpmPulseWhiteMix = 0;
+	uint32_t lastRpmPulseFrameTime = 0;
+	uint32_t rpmPulseStartTime = 0;
 	String gear = "N";
 	String prev_gear;
 	String speed = "0";
@@ -459,24 +467,28 @@ public:
 		const float rpm = data.EngineRPM;
 		const float maxRpm = data.maxAlertRPM;
 		const float redLineRpm = data.minAlertRPM;
+		engineRpm = max(0, static_cast<int>(lroundf(rpm)));
+		static constexpr float FALLBACK_MAX_RPM = 10000.0f;
+		static constexpr float MIN_REASONABLE_MAX_RPM = 1000.0f;
+		static constexpr float MAX_REASONABLE_MAX_RPM = 25000.0f;
+		const bool maxRpmValid = maxRpm >= MIN_REASONABLE_MAX_RPM &&
+			maxRpm <= MAX_REASONABLE_MAX_RPM;
+		const float effectiveMaxRpm = maxRpmValid ? maxRpm : FALLBACK_MAX_RPM;
 
-		if (maxRpm > 0.0f)
-		{
-			rpmPercent = constrain(
-				static_cast<int>((rpm / maxRpm) * 100.0f),
-				0,
-				100);
+		rpmAlertRangeValid = maxRpmValid && redLineRpm > 0.0f &&
+			redLineRpm < maxRpm;
 
-			rpmRedLineSetting = constrain(
+		rpmPercent = constrain(
+			static_cast<int>((rpm / effectiveMaxRpm) * 100.0f),
+			0,
+			100);
+
+		rpmRedLineSetting = rpmAlertRangeValid
+			? constrain(
 				static_cast<int>((redLineRpm / maxRpm) * 100.0f),
-				0,
-				100);
-		}
-		else
-		{
-			rpmPercent = 0;
-			rpmRedLineSetting = 90;
-		}
+				1,
+				99)
+			: 90;
 
 		// 圈速：currentLap 只有使用 C Packet 時才有值
 		currentLapTime = formatLapTimeMs(data.currentLap);
@@ -570,6 +582,8 @@ public:
 			static_cast<int>(data.brakeFiltered * 100.0f / 255.0f), 0, 100));
 
 		const uint16_t flags = static_cast<uint16_t>(data.flags);
+		revLimitAlertActive =
+			(flags & static_cast<uint16_t>(SimulatorFlags::RevLimiterBlinkAlertActive)) != 0;
 
 		// GT7 flags bit 0：車輛目前位於賽道／駕駛畫面中。
 		// 回到選單、離開賽道或載入畫面時會變成 false。
@@ -944,8 +958,8 @@ public:
 		snprintf(
 			text,
 			sizeof(text),
-			"Touch & hold %ds to change WiFi",
-			RESET_WAITING_TIME);
+			"Touch & hold %lus to change WiFi",
+			static_cast<unsigned long>(WIFI_RESET_HOLD_MS / 1000UL));
 
 		tft.drawCentreString(
 			text,
@@ -1307,7 +1321,8 @@ public:
 		const int gearNumber = gear.toInt();
 		const int radius = 54;
 		const int segmentSweep = 18;
-		const int segmentStep = 29;
+		const int segmentStep = 25;
+		const int firstSegmentStart = 28;
 		const uint16_t currentGearColor = tft.color565(72, 76, 82);
 		const uint16_t otherGearColor = tft.color565(218, 220, 224);
 
@@ -1334,7 +1349,7 @@ public:
 		// Segment zero starts at the bottom; higher gears illuminate upward.
 		for (int segment = 0; segment < 4; ++segment)
 		{
-			const int rightStart = 34 - segment * segmentStep;
+			const int rightStart = firstSegmentStart - segment * segmentStep;
 			const int rightEnd = rightStart + segmentSweep;
 			const bool marksCurrentGear = gearNumber >= 1 && gearNumber <= 4 &&
 				segment == gearNumber - 1;
@@ -1563,38 +1578,127 @@ public:
 
 	void drawRpmMeterGT3(bool forceUpdate)
 	{
+		// Shift-warning tuning: alert onset starts at peak brightness.
+		static constexpr float RPM_SHIFT_PULSE_FREQUENCY_HZ = 3.0f;
+		static constexpr float RPM_SHIFT_PULSE_MIN_WHITE_MIX = 0.25f;
+		static constexpr float RPM_SHIFT_PULSE_NEAR_MAX_WHITE_MIX = 0.45f;
+		static constexpr float RPM_SHIFT_PULSE_REV_ALERT_WHITE_MIX = 0.60f;
+		static constexpr uint32_t RPM_SHIFT_PULSE_FRAME_INTERVAL_MS = 16;
+
 		const int segmentCount = 36;
-		const int barLeft = 12;
-		const int barRight = DashboardLayout::WIDTH - barLeft;
 		const int segmentPitch = 8;
 		const int active = constrain((rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
 		const int previous = forceUpdate ? -1 : constrain((prev_rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
-		const bool redlineChanged = prevData["gt3Redline"] != String(rpmRedLineSetting);
-		if (!forceUpdate && active == previous && !redlineChanged) return;
-		const int gradientStops[] = {0, 12, 17, 21, 24, 27, 35};
+		const String gradientState = String(rpmRedLineSetting) + ":" +
+			String(rpmAlertRangeValid ? 1 : 0);
+		const bool redlineChanged = prevData["gt3Redline"] != gradientState;
+		const int displayedRpm = ((engineRpm + 25) / 50) * 50;
+		const String rpmValueText = String(displayedRpm);
+		const uint32_t now = millis();
+		const bool rpmWarningActive = rpmAlertRangeValid &&
+			rpmPercent >= rpmRedLineSetting;
+		const bool pulseActive = rpmWarningActive || revLimitAlertActive;
+		const bool revAlertStarted = revLimitAlertActive && !revLimitAlertWasActive;
+		const bool pulseStarted = (pulseActive && !rpmPulseWasActive) || revAlertStarted;
+		const bool pulseEnded = !pulseActive && rpmPulseWasActive;
+		const String rpmTextState = rpmValueText + ":" + String(pulseActive ? 1 : 0);
+		const bool rpmTextChanged = forceUpdate ||
+			prevData["gt3RpmValue"] != rpmTextState;
+		if (pulseStarted) rpmPulseStartTime = now;
+
+		float pulsePeakWhiteMix = RPM_SHIFT_PULSE_MIN_WHITE_MIX;
+		if (rpmWarningActive)
+		{
+			const float warningSpan = max(1, 100 - rpmRedLineSetting);
+			const float warningProgress = constrain(
+				(rpmPercent - rpmRedLineSetting) / warningSpan, 0.0f, 1.0f);
+			pulsePeakWhiteMix +=
+				(RPM_SHIFT_PULSE_NEAR_MAX_WHITE_MIX - RPM_SHIFT_PULSE_MIN_WHITE_MIX) *
+				warningProgress;
+		}
+		if (revLimitAlertActive)
+			pulsePeakWhiteMix = RPM_SHIFT_PULSE_REV_ALERT_WHITE_MIX;
+
+		uint8_t pulseWhiteMix = 0;
+		bool pulseFrameChanged = false;
+		if (pulseActive &&
+			(pulseStarted || now - lastRpmPulseFrameTime >= RPM_SHIFT_PULSE_FRAME_INTERVAL_MS))
+		{
+			const float elapsedSeconds = (now - rpmPulseStartTime) / 1000.0f;
+			const float pulse = 0.5f + 0.5f * cosf(
+				TWO_PI * RPM_SHIFT_PULSE_FREQUENCY_HZ * elapsedSeconds);
+			pulseWhiteMix = static_cast<uint8_t>(lroundf(
+				255.0f * pulsePeakWhiteMix * pulse));
+			pulseFrameChanged = pulseStarted || pulseWhiteMix != lastRpmPulseWhiteMix;
+			lastRpmPulseFrameTime = now;
+		}
+		else if (pulseActive)
+		{
+			pulseWhiteMix = lastRpmPulseWhiteMix;
+		}
+
+		if (!forceUpdate && active == previous && !redlineChanged &&
+			!pulseFrameChanged && !pulseEnded && !rpmTextChanged) return;
+		const float minAlertPosition = rpmAlertRangeValid
+			? constrain(rpmRedLineSetting / 100.0f, 0.30f, 0.95f)
+			: 0.80f;
+		const float gradientStops[] = {
+			0.0f,
+			minAlertPosition * 0.25f,
+			minAlertPosition * 0.50f,
+			minAlertPosition * 0.75f,
+			minAlertPosition,
+			1.0f};
 		const uint8_t gradientRgb[][3] = {
 			{0, 112, 255}, {0, 218, 255}, {35, 232, 118},
-			{255, 220, 0}, {255, 112, 0}, {255, 20, 28},
-			{255, 20, 28}};
-		const uint16_t inactiveColor = tft.color565(0x20, 0x28, 0x2C);
+			{255, 220, 0}, {255, 112, 0}, {255, 20, 28}};
+		const uint16_t inactiveColor = tft.color565(0x30, 0x38, 0x3C);
+		const uint16_t minAlertMarkerColor = tft.color565(0xFF, 0xD4, 0x3B);
+		const int firstSegmentCenterX = DashboardLayout::CENTER_X -
+			(segmentCount - 1) * segmentPitch / 2;
+		const int lastSegmentCenterX = DashboardLayout::CENTER_X +
+			(segmentCount - 1) * segmentPitch / 2;
+		const int minAlertMarkerX = rpmAlertRangeValid
+			? firstSegmentCenterX + lroundf(
+				(lastSegmentCenterX - firstSegmentCenterX) * minAlertPosition)
+			: -1;
+		const int previousMinAlertMarkerX = prevData["gt3MinAlertMarkerX"].toInt();
+		if (redlineChanged && previousMinAlertMarkerX > 0)
+		{
+			const int oldDx = previousMinAlertMarkerX - DashboardLayout::CENTER_X;
+			const int oldBarY = 15 + (oldDx * oldDx) / 1800;
+			tft.fillRect(previousMinAlertMarkerX - 3, oldBarY - 10, 7, 31, TFT_BLACK);
+		}
 
 		for (int i = 0; i < segmentCount; ++i)
 		{
-			if (!forceUpdate && !redlineChanged && i < min(active, previous)) continue;
-			if (!forceUpdate && !redlineChanged && i >= max(active, previous)) continue;
+			const bool rpmStateChanged = forceUpdate || redlineChanged ||
+				(i >= min(active, previous) && i < max(active, previous));
+			const bool pulseStateChanged = i < active && (pulseFrameChanged || pulseEnded);
+			if (!rpmStateChanged && !pulseStateChanged) continue;
+			const float position = i / static_cast<float>(segmentCount - 1);
 			int stop = 0;
-			while (stop < 5 && i > gradientStops[stop + 1]) ++stop;
-			const int span = gradientStops[stop + 1] - gradientStops[stop];
-			const int offset = constrain(i - gradientStops[stop], 0, span);
-			int red = gradientRgb[stop][0] +
-				(gradientRgb[stop + 1][0] - gradientRgb[stop][0]) * offset / span;
-			int green = gradientRgb[stop][1] +
-				(gradientRgb[stop + 1][1] - gradientRgb[stop][1]) * offset / span;
-			int blue = gradientRgb[stop][2] +
-				(gradientRgb[stop + 1][2] - gradientRgb[stop][2]) * offset / span;
-			const uint16_t color = i < active
-				? tft.color565(red, green, blue)
-				: inactiveColor;
+			while (stop < 4 && position > gradientStops[stop + 1]) ++stop;
+			const float span = gradientStops[stop + 1] - gradientStops[stop];
+			const float blend = constrain(
+				(position - gradientStops[stop]) / span, 0.0f, 1.0f);
+			int red = lroundf(gradientRgb[stop][0] +
+				(gradientRgb[stop + 1][0] - gradientRgb[stop][0]) * blend);
+			int green = lroundf(gradientRgb[stop][1] +
+				(gradientRgb[stop + 1][1] - gradientRgb[stop][1]) * blend);
+			int blue = lroundf(gradientRgb[stop][2] +
+				(gradientRgb[stop + 1][2] - gradientRgb[stop][2]) * blend);
+			uint16_t color = inactiveColor;
+			if (i < active)
+			{
+				if (pulseActive)
+				{
+					red += (255 - red) * pulseWhiteMix / 255;
+					green += (255 - green) * pulseWhiteMix / 255;
+					blue += (255 - blue) * pulseWhiteMix / 255;
+				}
+				color = tft.color565(red, green, blue);
+			}
 			// Test geometry: every segment is the same unrotated rectangle. Only its
 			// centre follows the existing gentle symmetric parabola.
 			const int segmentCenterX = DashboardLayout::CENTER_X +
@@ -1606,26 +1710,62 @@ public:
 			tft.fillRect(segmentCenterX - segmentWidth / 2, segmentY,
 				segmentWidth, thickness, color);
 		}
-		if (forceUpdate)
+		if (rpmAlertRangeValid)
 		{
-			const uint16_t rpmTextColor = tft.color565(160, 163, 168);
-			const char *labels[] = {"0", "2", "4", "6", "8", "10"};
-			for (int i = 0; i < 6; ++i)
+			const int markerDx = minAlertMarkerX - DashboardLayout::CENTER_X;
+			const int markerBarY = 15 + (markerDx * markerDx) / 1800;
+			const int markerTipY = markerBarY - 5;
+			tft.fillTriangle(
+				minAlertMarkerX - 3, markerTipY - 5,
+				minAlertMarkerX + 3, markerTipY - 5,
+				minAlertMarkerX, markerTipY,
+				minAlertMarkerColor);
+			tft.drawFastVLine(
+				minAlertMarkerX,
+				markerTipY + 1,
+				markerBarY + 20 - markerTipY,
+				minAlertMarkerColor);
+		}
+		if (rpmTextChanged)
+		{
+			const uint16_t rpmTextColor = pulseActive
+				? tft.color565(255, 90, 69)
+				: tft.color565(160, 163, 168);
+			static LGFX_Sprite rpmTextSprite(&tft);
+			static bool rpmTextSpriteCreated = false;
+			if (!rpmTextSpriteCreated)
 			{
-				const int labelX = barLeft + 4 +
-					(barRight - barLeft - 8) * i / 5;
-				const int dx = labelX - DashboardLayout::CENTER_X;
-				const int labelY = 3 + (dx * dx) / 1700;
-				drawMeasuredText(labels[i], labelX - 10, labelY, 20, 10,
-					&fonts::FreeSans9pt7b, rpmTextColor, MC_DATUM, 0.52f, 0.50f);
+				rpmTextSprite.setColorDepth(16);
+				rpmTextSpriteCreated = rpmTextSprite.createSprite(110, 10) != nullptr;
 			}
-
-			// Dedicated center caption band below the arc; it cannot overlap ticks.
-			drawMeasuredText("RPM x1000", DashboardLayout::CENTER_X - 55, 40, 110, 10,
-				&fonts::FreeSans9pt7b, rpmTextColor, MC_DATUM, 0.52f, 0.50f);
+			if (rpmTextSpriteCreated)
+			{
+				rpmTextSprite.fillSprite(TFT_BLACK);
+				rpmTextSprite.setTextColor(rpmTextColor, TFT_BLACK);
+				rpmTextSprite.setFont(&fonts::FreeSans9pt7b);
+				rpmTextSprite.setTextSize(0.52f, 0.50f);
+				rpmTextSprite.setTextDatum(MR_DATUM);
+				rpmTextSprite.drawString(rpmValueText, 53, 5);
+				rpmTextSprite.setTextDatum(ML_DATUM);
+				rpmTextSprite.drawString("RPM", 57, 5);
+				rpmTextSprite.pushSprite(DashboardLayout::CENTER_X - 55, 40);
+			}
+			else
+			{
+				tft.fillRect(DashboardLayout::CENTER_X - 55, 40, 110, 10, TFT_BLACK);
+				drawMeasuredText(rpmValueText, DashboardLayout::CENTER_X - 50, 40, 48, 10,
+					&fonts::FreeSans9pt7b, rpmTextColor, MR_DATUM, 0.52f, 0.50f);
+				drawMeasuredText("RPM", DashboardLayout::CENTER_X + 2, 40, 48, 10,
+					&fonts::FreeSans9pt7b, rpmTextColor, ML_DATUM, 0.52f, 0.50f);
+			}
+			prevData["gt3RpmValue"] = rpmTextState;
 		}
 		prev_rpmPercent = rpmPercent;
-		prevData["gt3Redline"] = String(rpmRedLineSetting);
+		prevData["gt3Redline"] = gradientState;
+		prevData["gt3MinAlertMarkerX"] = String(minAlertMarkerX);
+		revLimitAlertWasActive = revLimitAlertActive;
+		rpmPulseWasActive = pulseActive;
+		lastRpmPulseWhiteMix = pulseActive ? pulseWhiteMix : 0;
 	}
 
 	void drawPage1Legacy(bool forceUpdate = false)
