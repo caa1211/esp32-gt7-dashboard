@@ -1022,7 +1022,7 @@ public:
 		switch (activeDashboardTheme)
 		{
 		case DashboardTheme::Classic:
-			drawThemePlaceholder(state, DashboardTheme::Classic, forceUpdate);
+			drawPage1Legacy(forceUpdate);
 			break;
 		case DashboardTheme::Retro:
 			drawThemePlaceholder(state, DashboardTheme::Retro, forceUpdate);
@@ -2028,7 +2028,9 @@ public:
 			CELL_WIDTH * 2 - 2,
 			CELL_HEIGHT - 1,
 			constrain(tcLevel.toInt(), 0, 100),
+			constrain(tcFilteredLevel.toInt(), 0, 100),
 			constrain(absLevel.toInt(), 0, 100),
+			constrain(absFilteredLevel.toInt(), 0, 100),
 			forceUpdate);
 
 		// ABS、TCS 狀態與油量
@@ -2680,11 +2682,15 @@ public:
 		int32_t totalWidth,
 		int32_t totalHeight,
 		int throttlePercent,
+		int throttleAppliedPercent,
 		int brakePercent,
+		int brakeAppliedPercent,
 		bool forceUpdate = false)
 	{
 		throttlePercent = constrain(throttlePercent, 0, 100);
+		throttleAppliedPercent = constrain(throttleAppliedPercent, 0, 100);
 		brakePercent = constrain(brakePercent, 0, 100);
+		brakeAppliedPercent = constrain(brakeAppliedPercent, 0, 100);
 
 		// 上下兩格，而不是左右兩格。
 		const int32_t gap = 2;
@@ -2695,16 +2701,51 @@ public:
 		auto updateOneCell = [&](
 								 int32_t cellY,
 								 int percent,
+								 int appliedPercent,
 								 const char *id,
 								 uint16_t color)
 		{
-			const bool firstDraw = prevData.count(id) == 0;
-			const int oldPercent = firstDraw
-									   ? 0
-									   : constrain(prevData[id].toInt(), 0, 100);
+			const String state = String(percent) + ":" + String(appliedPercent);
+			const bool firstDraw = true;
+			const int oldPercent = 0;
 
-			if (!forceUpdate && !firstDraw && oldPercent == percent)
+			if (!forceUpdate && prevData[id] == state)
 			{
+				return;
+			}
+
+			const int32_t spriteInset = 2;
+			const int32_t spriteFillWidth = totalWidth - spriteInset * 2;
+			const int32_t spriteFillHeight = cellHeight - spriteInset * 2;
+			const int32_t spriteInputFill = spriteFillWidth * percent / 100;
+			const int32_t spriteAppliedFill = spriteFillWidth * appliedPercent / 100;
+			static LGFX_Sprite classicPedalSprite(&tft);
+			static int32_t spriteWidth = 0;
+			static int32_t spriteHeight = 0;
+			if (spriteWidth != totalWidth || spriteHeight != cellHeight)
+			{
+				classicPedalSprite.deleteSprite();
+				classicPedalSprite.setColorDepth(16);
+				if (classicPedalSprite.createSprite(totalWidth, cellHeight) != nullptr)
+				{
+					spriteWidth = totalWidth;
+					spriteHeight = cellHeight;
+				}
+			}
+
+			if (spriteWidth == totalWidth && spriteHeight == cellHeight)
+			{
+				classicPedalSprite.fillSprite(TFT_BLACK);
+				if (spriteInputFill > 0)
+					classicPedalSprite.fillRect(spriteInset, spriteInset,
+						spriteInputFill, spriteFillHeight, TFT_WHITE);
+				if (spriteAppliedFill > 0)
+					classicPedalSprite.fillRect(spriteInset, spriteInset,
+						spriteAppliedFill, spriteFillHeight, color);
+				classicPedalSprite.drawRoundRect(0, 0, totalWidth, cellHeight, 5,
+					TFT_DARKGREY);
+				classicPedalSprite.pushSprite(x, cellY);
+				prevData[id] = state;
 				return;
 			}
 
@@ -2725,7 +2766,8 @@ public:
 
 				if (newFill > 0)
 				{
-					tft.fillRect(fillX, fillY, newFill, fillHeight, color);
+					tft.fillRect(fillX, fillY, newFill, fillHeight,
+						TFT_WHITE);
 				}
 			}
 			else if (newFill > oldFill)
@@ -2750,12 +2792,19 @@ public:
 			}
 
 			// 保險重畫邊框，避免填色蓋到外框。
+			const int32_t appliedFill = fillWidthMax * appliedPercent / 100;
+			if (appliedFill > 0)
+			{
+				tft.fillRect(fillX, fillY, appliedFill, fillHeight, color);
+			}
 			tft.drawRoundRect(x, cellY, totalWidth, cellHeight, 5, TFT_DARKGREY);
-			prevData[id] = String(percent);
+			prevData[id] = state;
 		};
 
-		updateOneCell(throttleY, throttlePercent, "pedalThrottle", TFT_YELLOW);
-		updateOneCell(brakeY, brakePercent, "pedalBrake", TFT_BLUE);
+		updateOneCell(throttleY, throttlePercent, throttleAppliedPercent,
+			"pedalThrottle", TFT_YELLOW);
+		updateOneCell(brakeY, brakePercent, brakeAppliedPercent,
+			"pedalBrake", TFT_BLUE);
 	}
 
 	void drawCell(

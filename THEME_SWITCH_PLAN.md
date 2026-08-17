@@ -8,7 +8,7 @@ Overall progress:
 
 - [x] **Phase 1 — Theme infrastructure** — accepted on ST7789 hardware (2026-08-17)
 - [x] **Phase 2 — Touch Settings and theme selection** — accepted on ST7789 and ILI9341 hardware (2026-08-17)
-- [ ] **Phase 3 — Classic 1.2.5 renderer**
+- [x] **Phase 3 — Classic 1.2.5 renderer** — accepted on ST7789 hardware (2026-08-17)
 - [ ] **Phase 4 — Retro renderer**
 - [ ] **Phase 5 — Integration, regression testing and release**
 
@@ -313,15 +313,17 @@ Compare Classic on the physical display against the version 1.2.5 UI reference w
 
 Pass conditions:
 
-- [ ] The major layout, typography, colors and visual hierarchy match version 1.2.5.
-- [ ] Every current dashboard function has a defined place; no current function disappears.
-- [ ] No obsolete 1.2.5 parser, Wi-Fi or button behavior has been restored.
-- [ ] Speed, gear, RPM, timing, fuel, tyre, pedal and driver-aid fields update correctly.
-- [ ] RPM scaling and shift-warning behavior use the current telemetry logic.
-- [ ] Returning from Classic to GT3 leaves neither stale pixels nor stale cached values.
-- [ ] Classic remains stable for at least one normal driving session.
+- [x] The major layout, typography, colors and visual hierarchy match version 1.2.5.
+- [x] Every current dashboard function has a defined place; no current function disappears.
+- [x] No obsolete 1.2.5 parser, Wi-Fi or button behavior has been restored.
+- [x] Speed, gear, RPM, timing, fuel, tyre, pedal and driver-aid fields update correctly.
+- [x] RPM scaling and shift-warning behavior use the current telemetry logic.
+- [x] Returning from Classic to GT3 leaves neither stale pixels nor stale cached values.
+- [x] Classic remains stable for at least one normal driving session.
 
 Minor pixel-level visual tuning may remain, but data correctness and clean switching are required before Phase 4.
+
+**Acceptance record:** Phase 3 was accepted after physical ST7789 testing of the restored Classic layout, current telemetry fields, theme switching and the two-layer throttle/brake presentation. Pedal cells are composed off-screen to prevent flicker; driver input uses a white base layer and the filtered actual output uses the existing yellow/blue foreground. The final white-base adjustment was explicitly accepted without another visual verification cycle.
 
 ### Phase 4 — Retro Renderer
 
