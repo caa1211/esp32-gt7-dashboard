@@ -1,4 +1,8 @@
 {
+  "1.3.0": [
+    "Added switchable GT3, Classic, and Retro dashboard themes with persistent on-device selection; GT3 remains the default.",
+    "Added the touch Settings menu and changed short tap behavior to wake-only."
+  ],
   "1.2.7": [
     "Added telemetry-driven RPM colours and progressive GT7 shift-warning pulse."
   ],
