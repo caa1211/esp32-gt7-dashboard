@@ -1,4 +1,7 @@
 {
+  "1.2.7": [
+    "Added telemetry-driven RPM colours and progressive GT7 shift-warning pulse."
+  ],
   "1.2.6": [
     "Introduced the refined low-RAM GT3 dashboard UI."
   ],

@@ -1,6 +1,16 @@
 {
   "versions": [
     {
+      "version": "1.2.7",
+      "notes": [
+        "Added telemetry-driven RPM colours and progressive GT7 shift-warning pulse."
+      ],
+      "manifests": {
+        "ili9341": "versions/1.2.7/manifest-ili9341.json",
+        "st7789": "versions/1.2.7/manifest-st7789.json"
+      }
+    },
+    {
       "version": "1.2.6",
       "notes": [
         "Introduced the refined low-RAM GT3 dashboard UI."
