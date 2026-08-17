@@ -594,7 +594,7 @@
           return response.json();
         })
         .then((releaseIndex) => {
-          releases = releaseIndex.versions.slice(0, 5);
+          releases = releaseIndex.versions.slice(0, 10);
           selectedVersion = releases[0]?.version ?? "";
           selectManifest();
         })

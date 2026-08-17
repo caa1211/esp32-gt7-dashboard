@@ -1563,22 +1563,27 @@ public:
 
 	void drawRpmMeterGT3(bool forceUpdate)
 	{
-		const int segmentCount = DashboardLayout::RPM_SEGMENTS;
+		const int segmentCount = 36;
+		const int barLeft = 12;
+		const int barRight = DashboardLayout::WIDTH - barLeft;
+		const int segmentPitch = 8;
 		const int active = constrain((rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
 		const int previous = forceUpdate ? -1 : constrain((prev_rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
 		const bool redlineChanged = prevData["gt3Redline"] != String(rpmRedLineSetting);
 		if (!forceUpdate && active == previous && !redlineChanged) return;
-		const int gradientStops[] = {0, 11, 20, 26, 31};
+		const int gradientStops[] = {0, 12, 17, 21, 24, 27, 35};
 		const uint8_t gradientRgb[][3] = {
-			{86, 90, 96}, {245, 245, 245}, {255, 220, 0},
-			{255, 118, 0}, {255, 20, 28}};
+			{0, 112, 255}, {0, 218, 255}, {35, 232, 118},
+			{255, 220, 0}, {255, 112, 0}, {255, 20, 28},
+			{255, 20, 28}};
+		const uint16_t inactiveColor = tft.color565(0x20, 0x28, 0x2C);
 
 		for (int i = 0; i < segmentCount; ++i)
 		{
 			if (!forceUpdate && !redlineChanged && i < min(active, previous)) continue;
 			if (!forceUpdate && !redlineChanged && i >= max(active, previous)) continue;
 			int stop = 0;
-			while (stop < 3 && i > gradientStops[stop + 1]) ++stop;
+			while (stop < 5 && i > gradientStops[stop + 1]) ++stop;
 			const int span = gradientStops[stop + 1] - gradientStops[stop];
 			const int offset = constrain(i - gradientStops[stop], 0, span);
 			int red = gradientRgb[stop][0] +
@@ -1587,24 +1592,19 @@ public:
 				(gradientRgb[stop + 1][1] - gradientRgb[stop][1]) * offset / span;
 			int blue = gradientRgb[stop][2] +
 				(gradientRgb[stop + 1][2] - gradientRgb[stop][2]) * offset / span;
-			if (i >= active)
-			{
-				red /= 4;
-				green /= 4;
-				blue /= 4;
-			}
-			const uint16_t color = tft.color565(red, green, blue);
-			// A shallow parabola gives an inexpensive GT-style arc. Each segment is
-			// a four-point strip made from two filled triangles, with a 3 px gap.
-			const int x0 = DashboardLayout::RPM_SEGMENT_X + i * DashboardLayout::RPM_SEGMENT_PITCH;
-			const int x1 = x0 + DashboardLayout::RPM_SEGMENT_W;
-			const int dx0 = x0 - DashboardLayout::CENTER_X;
-			const int dx1 = x1 - DashboardLayout::CENTER_X;
-			const int y0 = 11 + (dx0 * dx0) / 1000;
-			const int y1 = 11 + (dx1 * dx1) / 1000;
-			const int thickness = DashboardLayout::RPM_SEGMENT_THICKNESS;
-			tft.fillTriangle(x0, y0, x1, y1, x0, y0 + thickness, color);
-			tft.fillTriangle(x1, y1, x1, y1 + thickness, x0, y0 + thickness, color);
+			const uint16_t color = i < active
+				? tft.color565(red, green, blue)
+				: inactiveColor;
+			// Test geometry: every segment is the same unrotated rectangle. Only its
+			// centre follows the existing gentle symmetric parabola.
+			const int segmentCenterX = DashboardLayout::CENTER_X +
+				(2 * i - (segmentCount - 1)) * segmentPitch / 2;
+			const int dx = segmentCenterX - DashboardLayout::CENTER_X;
+			const int segmentY = 15 + (dx * dx) / 1800;
+			const int segmentWidth = 6;
+			const int thickness = 18;
+			tft.fillRect(segmentCenterX - segmentWidth / 2, segmentY,
+				segmentWidth, thickness, color);
 		}
 		if (forceUpdate)
 		{
@@ -1612,17 +1612,17 @@ public:
 			const char *labels[] = {"0", "2", "4", "6", "8", "10"};
 			for (int i = 0; i < 6; ++i)
 			{
-				const int labelX = DashboardLayout::RPM_LABEL_LEFT_X +
-					(DashboardLayout::RPM_LABEL_RIGHT_X - DashboardLayout::RPM_LABEL_LEFT_X) * i / 5;
+				const int labelX = barLeft + 4 +
+					(barRight - barLeft - 8) * i / 5;
 				const int dx = labelX - DashboardLayout::CENTER_X;
-				const int labelY = 1 + (dx * dx) / 1100;
+				const int labelY = 3 + (dx * dx) / 1700;
 				drawMeasuredText(labels[i], labelX - 10, labelY, 20, 10,
-					&fonts::FreeSans9pt7b, rpmTextColor, MC_DATUM, 0.54f, 0.52f);
+					&fonts::FreeSans9pt7b, rpmTextColor, MC_DATUM, 0.52f, 0.50f);
 			}
 
 			// Dedicated center caption band below the arc; it cannot overlap ticks.
-			drawMeasuredText("RPM x1000", DashboardLayout::CENTER_X - 55, 28, 110, 18,
-				&fonts::FreeSans9pt7b, rpmTextColor, MC_DATUM, 0.74f, 0.72f);
+			drawMeasuredText("RPM x1000", DashboardLayout::CENTER_X - 55, 40, 110, 10,
+				&fonts::FreeSans9pt7b, rpmTextColor, MC_DATUM, 0.52f, 0.50f);
 		}
 		prev_rpmPercent = rpmPercent;
 		prevData["gt3Redline"] = String(rpmRedLineSetting);

@@ -90,8 +90,8 @@ jobs:
             const releaseIndex = JSON.parse(await readFile(releasesPath, "utf8"));
             const releases = Array.isArray(releaseIndex.versions) ? releaseIndex.versions : [];
 
-            if (releases.length === 0 || releases.length > 5) {
-              throw new Error("installer/releases.json must contain between 1 and 5 versions.");
+            if (releases.length === 0 || releases.length > 10) {
+              throw new Error("installer/releases.json must contain between 1 and 10 versions.");
             }
 
             const manifestPaths = [
