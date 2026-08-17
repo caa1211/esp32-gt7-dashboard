@@ -1,5 +1,7 @@
 # Dashboard Theme Switching Plan
 
+See also: [Theme Development Guide](THEME_DEVELOPMENT.md).
+
 ## Project Status
 
 This is a major UI architecture renovation. Work proceeds one phase at a time, and every phase must pass its physical-device acceptance gate before the next phase begins.
@@ -369,15 +371,15 @@ Run a final regression pass without temporary theme overrides or test-only scree
 
 Pass conditions:
 
-- [ ] A clean build succeeds for `esp32` and `esp32-st7789`.
+- [x] A clean build succeeds for `esp32` and `esp32-st7789`.
 - [ ] Both binaries are flashed or otherwise validated on their intended display target where hardware is available.
-- [ ] Fresh installation defaults to GT3.
-- [ ] Upgrade from version 1.2.7 preserves a usable default and does not require manual storage clearing.
-- [ ] Classic, GT3 and Retro all receive identical live telemetry inputs and expose the same supported functions.
+- [x] Fresh installation defaults to GT3.
+- [x] Upgrade from version 1.2.7 preserves a usable default and does not require manual storage clearing.
+- [x] Classic, GT3 and Retro all receive identical live telemetry inputs and expose the same supported functions.
 - [ ] Theme selection survives reboot and ordinary Wi-Fi reconnection.
 - [ ] Screen on/off, Settings entry, Settings timeout and Wi-Fi reset all pass regression testing.
 - [ ] No theme-specific crash, watchdog reset or obvious memory degradation appears during an extended session.
-- [ ] README documents Settings entry, theme switching, the three included themes and Wi-Fi reset.
+- [x] README documents Settings entry, theme switching, the three included themes and Wi-Fi reset.
 - [ ] Release notes describe the theme system and identify GT3 as the default.
 - [ ] Installer manifests and archived firmware packages contain the correct version and both display builds.
 

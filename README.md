@@ -1,7 +1,7 @@
 
 # ESP32 GT7 Dashboard ([Installer](https://caa1211.github.io/esp32-gt7-dashboard/))
 
-> **Development roadmap:** The multi-theme UI renovation (Classic, GT3 and Retro) is tracked in [THEME_SWITCH_PLAN.md](THEME_SWITCH_PLAN.md), including phase-by-phase progress and hardware acceptance checks.
+> **Theme development:** See the [theme guide](docs/THEME_DEVELOPMENT.md) and [implementation plan](docs/THEME_SWITCH_PLAN.md) for architecture, workflow and hardware acceptance checks.
 
 A standalone **Gran Turismo 7 dashboard** running entirely on an ESP32.
 No SimHub • No PC • Auto PS5 Discovery
@@ -69,14 +69,15 @@ Currently supported:
 
 ---
 
-## Firmware Versions
+## Dashboard Themes
 
-The dashboard appearance differs between firmware versions:
+One firmware includes three dashboard themes with the same live GT7 telemetry features:
 
-- **1.2.5** uses the original engineering-style dashboard layout.
-- **1.2.6** introduces the refined GT3-style dashboard with a centered gear display, curved segmented RPM bar, larger telemetry values, tyre-temperature blocks, and brake/throttle bars.
+- **GT3** (default) — centered gear, curved shift-light bar and a dark motorsport layout.
+- **Classic** — the original engineering-style five-column dashboard.
+- **Retro** — a warm paper-colored instrument panel with dark text and restrained accents.
 
-Both versions are available for the supported ILI9341 and ST7789 display variants. Choose the version whose dashboard layout you prefer in the Web Installer.
+Press and hold the display for 2 seconds, choose **SELECT THEME**, then select a theme. The selection is saved by enum value and restored after reboot. Resetting Wi-Fi does not reset the selected theme.
 
 <p align="center">
   <img src="photos/1.25and1.26_en.png" width="900" alt="Comparison of GT7 Dashboard firmware versions 1.2.5 and 1.2.6">
@@ -149,13 +150,15 @@ No IP address configuration is required.
 
 **Tap**
 
-- Turn the display on or off.
+- Wake the display when it is asleep. Tapping an active display does nothing.
 
 **Press and Hold (2 sec)**
 
 - Open Settings.
 - Select and save the Classic, GT3, or Retro dashboard theme.
 - Reset saved Wi-Fi through a separate confirmation screen.
+
+GT3 is used when no theme has been saved. Classic, GT3 and Retro expose the same supported telemetry; only their presentation differs.
 
 <p align="center">
   <img src="photos/003.jpg" width="900" alt="ESP32 GT7 Dashboard">
@@ -169,7 +172,7 @@ To reduce power consumption and extend display life:
 
 - The display automatically enters sleep mode after several minutes without GT7 telemetry.
 - It automatically wakes when GT7 telemetry is detected again.
-- The display can also be turned off manually by tapping the screen.
+- Tap the screen to wake it after automatic sleep.
 
 ---
 

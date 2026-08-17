@@ -3715,13 +3715,9 @@ public:
 					gameStoppedTimerStarted = false;
 				}
 			}
-			else
-			{
-				screenOffByUser = true;
-				screenSleeping = true;
-				fadeScreenOff();
-				gameStoppedTimerStarted = false;
-			}
+			// While the display is active, a short tap intentionally does nothing.
+			// This prevents an attempted Settings long-press from turning the screen
+			// off when the user releases slightly before the hold threshold.
 		}
 
 		wasTouched = isTouched;
