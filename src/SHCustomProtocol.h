@@ -283,7 +283,6 @@ private:
 		WifiResetConfirmation,
 	};
 
-	static constexpr unsigned long SETTINGS_HOLD_MS = 2000UL;
 	static constexpr unsigned long SETTINGS_TIMEOUT_MS = 15000UL;
 	SettingsScreen settingsScreen = SettingsScreen::Closed;
 	unsigned long settingsLastInteractionTime = 0;
@@ -1307,7 +1306,7 @@ public:
 		drawRetroTextValueBuffered(7, 77, 84, 62, state.speed, "retroSpeed", ink,
 			7, MC_DATUM, forceUpdate, speedSprite, speedSpriteCreated, 0.72f, 0.82f);
 		drawRetroTextValue(104, 76, 74, 72, state.gear, "retroGear", ink,
-			7, MC_DATUM, forceUpdate, 1.05f, 1.08f);
+			7, MC_DATUM, forceUpdate, 1.20f, 1.22f);
 
 		// Keep labels and values on separate rows. Fractionally scaled bitmap fonts
 		// produced malformed glyphs on the 2.8-inch panel, so Retro uses native sizes.
@@ -1430,15 +1429,8 @@ public:
 			barHeight,
 			tft.color565(28, 28, 28));
 
-		char text[40];
-		snprintf(
-			text,
-			sizeof(text),
-			"Touch & hold %lus for settings",
-			static_cast<unsigned long>(SETTINGS_HOLD_MS / 1000UL));
-
 		tft.drawCentreString(
-			text,
+			"Tap for settings",
 			SCREEN_WIDTH / 2,
 			SCREEN_HEIGHT - 26,
 			1);
@@ -2530,17 +2522,25 @@ public:
 		const int segmentWidth =
 			(innerWidth - totalGapWidth) / segmentCount;
 
+		const int markerX = rpmAlertRangeValid
+			? innerX + lroundf((innerWidth - 1) *
+				constrain(rpmRedLineSetting / 100.0f, 0.0f, 1.0f))
+			: -1;
+		const int previousMarkerX = prevData["classicMinAlertMarkerX"].toInt();
+		const bool markerChanged = markerX != previousMarkerX;
+		const bool fullRedraw = forceUpdate || markerChanged;
+
 		/*
 		 * 首次繪製或切回主畫面時：
 		 * 清一次內部，再完整畫出目前的 Bar。
 		 */
-		if (forceUpdate)
+		if (fullRedraw)
 		{
 			tft.fillRect(
-				innerX,
-				innerY,
-				innerWidth,
-				innerHeight,
+				x,
+				y,
+				width,
+				frameHeight + 10,
 				TFT_BLACK);
 
 			previousActiveSegments = 0;
@@ -2628,7 +2628,19 @@ public:
 		 * 例如 51% → 54% 都是同樣格數，畫面完全不更新。
 		 */
 
+		if (markerX >= 0)
+		{
+			const uint16_t markerColor = tft.color565(255, 52, 42);
+			const int arrowTipY = y + frameHeight + 1;
+			tft.drawFastVLine(markerX, y, arrowTipY - y + 1, markerColor);
+			tft.fillTriangle(markerX, arrowTipY,
+				markerX - 6, y + frameHeight + 9,
+				markerX + 6, y + frameHeight + 9,
+				markerColor);
+		}
+
 		prev_rpmPercent = safeRpmPercent;
+		prevData["classicMinAlertMarkerX"] = String(markerX);
 	}
 
 	void drawRpmMeter2(int32_t x, int32_t y, int width, int height)
@@ -3628,9 +3640,7 @@ public:
 		}
 
 		static bool wasTouched = false;
-		static bool longPressTriggered = false;
 		static bool waitForReleaseAfterScreenChange = false;
-		static unsigned long touchStartTime = 0;
 		const bool isTouched = tft.getTouch(&touchX, &touchY);
 
 		if (waitForReleaseAfterScreenChange)
@@ -3681,23 +3691,7 @@ public:
 			return;
 		}
 
-		if (isTouched && !wasTouched)
-		{
-			touchStartTime = millis();
-			longPressTriggered = false;
-		}
-
-		if (isTouched && !longPressTriggered &&
-			millis() - touchStartTime >= SETTINGS_HOLD_MS)
-		{
-			longPressTriggered = true;
-			showSettingsScreen(SettingsScreen::Main);
-			waitForReleaseAfterScreenChange = true;
-			wasTouched = isTouched;
-			return;
-		}
-
-		if (!isTouched && wasTouched && !longPressTriggered)
+		if (!isTouched && wasTouched)
 		{
 			if (screenSleeping)
 			{
@@ -3715,9 +3709,11 @@ public:
 					gameStoppedTimerStarted = false;
 				}
 			}
-			// While the display is active, a short tap intentionally does nothing.
-			// This prevents an attempted Settings long-press from turning the screen
-			// off when the user releases slightly before the hold threshold.
+			else
+			{
+				showSettingsScreen(SettingsScreen::Main);
+				waitForReleaseAfterScreenChange = true;
+			}
 		}
 
 		wasTouched = isTouched;

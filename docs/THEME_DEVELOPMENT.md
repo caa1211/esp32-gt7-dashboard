@@ -103,7 +103,7 @@ For each display controller, verify:
 - saved theme restoration after power cycling
 - Settings Back and timeout behavior
 - Wi-Fi reset Cancel and confirmation
-- automatic sleep and tap-to-wake
+- automatic sleep, tap-to-wake and active-screen tap-to-Settings behavior
 - no visible flicker in high-frequency fields
 - no watchdog reset or obvious heap degradation during a driving session
 

@@ -289,7 +289,7 @@ Pass conditions:
 - [ ] The entry press cannot accidentally activate the first menu item.
 - [ ] All buttons can be tapped comfortably without touchscreen calibration.
 - [ ] A visual pressed state identifies the button being activated.
-- [ ] Holding or slowly releasing a touch produces only one action.
+- [x] Tapping and releasing produces only one action.
 - [ ] Theme Selection lists Classic, GT3 and Retro and marks the active choice.
 - [ ] Selecting each theme saves it and returns to the corresponding renderer or placeholder.
 - [ ] Power cycling restores the last selected theme.

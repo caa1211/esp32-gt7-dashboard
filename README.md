@@ -77,7 +77,7 @@ One firmware includes three dashboard themes with the same live GT7 telemetry fe
 - **Classic** — the original engineering-style five-column dashboard.
 - **Retro** — a warm paper-colored instrument panel with dark text and restrained accents.
 
-Press and hold the display for 2 seconds, choose **SELECT THEME**, then select a theme. The selection is saved by enum value and restored after reboot. Resetting Wi-Fi does not reset the selected theme.
+While the display is active, tap it once, choose **SELECT THEME**, then select a theme. The selection is saved by enum value and restored after reboot. Resetting Wi-Fi does not reset the selected theme.
 
 <p align="center">
   <img src="photos/1.25and1.26_en.png" width="900" alt="Comparison of GT7 Dashboard firmware versions 1.2.5 and 1.2.6">
@@ -150,11 +150,8 @@ No IP address configuration is required.
 
 **Tap**
 
-- Wake the display when it is asleep. Tapping an active display does nothing.
-
-**Press and Hold (2 sec)**
-
-- Open Settings.
+- Open Settings while the display is active.
+- Wake the display when it is asleep; the first tap does not also open Settings.
 - Select and save the Classic, GT3, or Retro dashboard theme.
 - Reset saved Wi-Fi through a separate confirmation screen.
 
