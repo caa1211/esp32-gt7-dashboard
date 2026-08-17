@@ -151,10 +151,11 @@ No IP address configuration is required.
 
 - Turn the display on or off.
 
-**Press and Hold (5 sec)**
+**Press and Hold (2 sec)**
 
-- Clear the saved Wi-Fi configuration.
-- Reboot into Wi-Fi setup mode.
+- Open Settings.
+- Select and save the Classic, GT3, or Retro dashboard theme.
+- Reset saved Wi-Fi through a separate confirmation screen.
 
 <p align="center">
   <img src="photos/003.jpg" width="900" alt="ESP32 GT7 Dashboard">

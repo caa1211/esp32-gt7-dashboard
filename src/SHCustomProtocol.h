@@ -274,8 +274,20 @@ private:
 	// 是否由使用者手動關閉
 	bool screenOffByUser = false;
 
-	// 全螢幕長按 5 秒後顯示 Wi-Fi 重設確認畫面
-	static constexpr unsigned long WIFI_RESET_HOLD_MS = 5000UL;
+	// Long-press the dashboard to open the touch-driven Settings menu.
+	enum class SettingsScreen : uint8_t
+	{
+		Closed,
+		Main,
+		ThemeSelection,
+		WifiResetConfirmation,
+	};
+
+	static constexpr unsigned long SETTINGS_HOLD_MS = 2000UL;
+	static constexpr unsigned long SETTINGS_TIMEOUT_MS = 15000UL;
+	SettingsScreen settingsScreen = SettingsScreen::Closed;
+	unsigned long settingsLastInteractionTime = 0;
+	int settingsPressedButton = -1;
 	bool wifiResetConfirmOpen = false;
 	bool wifiResetRequested = false;
 
@@ -316,6 +328,9 @@ private:
 		lastRpmPulseWhiteMix = 0;
 		lastRpmPulseFrameTime = 0;
 		rpmPulseStartTime = millis();
+		connectingScreenActive = false;
+		connectingAnimationStep = 0;
+		lastConnectingAnimationTime = 0;
 		forceUpdate = true;
 	}
 
@@ -935,11 +950,12 @@ public:
 			fadeScreenOff();
 		}
 
-		// 暗屏時仍需讀取觸控，才能點擊喚醒或長按進入 Wi-Fi 重設。
+		// Keep reading touch while asleep so a tap can wake the display and a
+		// long press can open Settings.
 		readTouch();
 
 		// 確認畫面開啟時，不讓 Dashboard 或 Connecting 畫面蓋回來。
-		if (wifiResetConfirmOpen)
+		if (settingsScreen != SettingsScreen::Closed)
 		{
 			return;
 		}
@@ -1098,8 +1114,8 @@ public:
 		snprintf(
 			text,
 			sizeof(text),
-			"Touch & hold %lus to change WiFi",
-			static_cast<unsigned long>(WIFI_RESET_HOLD_MS / 1000UL));
+			"Touch & hold %lus for settings",
+			static_cast<unsigned long>(SETTINGS_HOLD_MS / 1000UL));
 
 		tft.drawCentreString(
 			text,
@@ -2949,7 +2965,155 @@ public:
 		forceUpdate = true;
 	}
 
+	bool touchInside(int x, int y, int width, int height) const
+	{
+		return touchX >= x && touchX < x + width &&
+			touchY >= y && touchY < y + height;
+	}
+
+	void drawSettingsButton(
+		int x,
+		int y,
+		int width,
+		int height,
+		const String &label,
+		bool pressed,
+		bool active = false,
+		bool destructive = false)
+	{
+		const uint16_t normalFill = destructive
+			? tft.color565(92, 24, 28)
+			: active
+				? tft.color565(18, 74, 104)
+				: tft.color565(42, 46, 52);
+		const uint16_t fill = pressed ? tft.color565(38, 126, 150) : normalFill;
+		const uint16_t border = active ? TFT_WHITE : TFT_LIGHTGREY;
+		tft.fillRoundRect(x, y, width, height, 7, fill);
+		tft.drawRoundRect(x, y, width, height, 7, border);
+		if (active)
+			tft.drawRoundRect(x + 1, y + 1, width - 2, height - 2, 6, border);
+		tft.setTextColor(TFT_WHITE, fill);
+		tft.setTextDatum(MC_DATUM);
+		tft.drawString(label, x + width / 2, y + height / 2, 2);
+	}
+
+	void drawSettingsScreen(int pressedButton = -1)
+	{
+		tft.fillScreen(TFT_BLACK);
+		tft.setTextPadding(0);
+		tft.setTextDatum(MC_DATUM);
+
+		if (settingsScreen == SettingsScreen::Main)
+		{
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawString("SETTINGS", X_CENTER, 25, 4);
+			drawSettingsButton(30, 55, 260, 48, "SELECT THEME", pressedButton == 0);
+			drawSettingsButton(30, 113, 260, 48, "RESET WIFI", pressedButton == 1,
+				false, true);
+			drawSettingsButton(30, 171, 260, 48, "BACK", pressedButton == 2);
+		}
+		else if (settingsScreen == SettingsScreen::ThemeSelection)
+		{
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawString("SELECT THEME", X_CENTER, 22, 4);
+			const DashboardTheme themes[] = {
+				DashboardTheme::Classic,
+				DashboardTheme::GT3,
+				DashboardTheme::Retro};
+			for (int i = 0; i < 3; ++i)
+			{
+				const bool active = activeDashboardTheme == themes[i];
+				String label = dashboardThemeName(themes[i]);
+				if (active) label += "  [ACTIVE]";
+				drawSettingsButton(30, 42 + i * 46, 260, 38, label,
+					pressedButton == i, active);
+			}
+			drawSettingsButton(30, 180, 260, 38, "BACK", pressedButton == 3);
+		}
+		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		{
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawString("Reset saved Wi-Fi?", X_CENTER, 60, 4);
+			tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+			tft.drawString("Device will restart", X_CENTER, 95, 2);
+			drawSettingsButton(25, 135, 120, 62, "CANCEL", pressedButton == 0);
+			drawSettingsButton(175, 135, 120, 62, "RESET", pressedButton == 1,
+				false, true);
+		}
+
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	void redrawSettingsButton(int button, bool pressed)
+	{
+		if (settingsScreen == SettingsScreen::Main)
+		{
+			if (button == 0)
+				drawSettingsButton(30, 55, 260, 48, "SELECT THEME", pressed);
+			else if (button == 1)
+				drawSettingsButton(30, 113, 260, 48, "RESET WIFI", pressed,
+					false, true);
+			else if (button == 2)
+				drawSettingsButton(30, 171, 260, 48, "BACK", pressed);
+		}
+		else if (settingsScreen == SettingsScreen::ThemeSelection)
+		{
+			if (button >= 0 && button <= 2)
+			{
+				const DashboardTheme themes[] = {
+					DashboardTheme::Classic,
+					DashboardTheme::GT3,
+					DashboardTheme::Retro};
+				const bool active = activeDashboardTheme == themes[button];
+				String label = dashboardThemeName(themes[button]);
+				if (active) label += "  [ACTIVE]";
+				drawSettingsButton(30, 42 + button * 46, 260, 38, label,
+					pressed, active);
+			}
+			else if (button == 3)
+			{
+				drawSettingsButton(30, 180, 260, 38, "BACK", pressed);
+			}
+		}
+		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		{
+			if (button == 0)
+				drawSettingsButton(25, 135, 120, 62, "CANCEL", pressed);
+			else if (button == 1)
+				drawSettingsButton(175, 135, 120, 62, "RESET", pressed,
+					false, true);
+		}
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	void showSettingsScreen(SettingsScreen screen)
+	{
+		screenSleeping = false;
+		screenOffByUser = false;
+		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
+		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+		settingsScreen = screen;
+		wifiResetConfirmOpen = screen == SettingsScreen::WifiResetConfirmation;
+		settingsPressedButton = -1;
+		settingsLastInteractionTime = millis();
+		drawSettingsScreen();
+	}
+
+	void closeSettings()
+	{
+		settingsScreen = SettingsScreen::Closed;
+		wifiResetConfirmOpen = false;
+		settingsPressedButton = -1;
+		redrawAfterWifiResetDialog();
+	}
+
 	void showWifiResetConfirm()
+	{
+		showSettingsScreen(SettingsScreen::WifiResetConfirmation);
+	}
+
+#if 0
+	void showWifiResetConfirmLegacy()
 	{
 		// 即使原本處於暗屏，也要先亮起確認畫面。
 		screenSleeping = false;
@@ -2986,6 +3150,8 @@ public:
 		tft.setTextDatum(TL_DATUM);
 	}
 
+#endif
+
 	void showWifiResettingScreen()
 	{
 		tft.fillScreen(TFT_BLACK);
@@ -3012,7 +3178,185 @@ public:
 		return true;
 	}
 
+	int settingsButtonAtTouch() const
+	{
+		if (settingsScreen == SettingsScreen::Main)
+		{
+			if (touchInside(30, 55, 260, 48)) return 0;
+			if (touchInside(30, 113, 260, 48)) return 1;
+			if (touchInside(30, 171, 260, 48)) return 2;
+		}
+		else if (settingsScreen == SettingsScreen::ThemeSelection)
+		{
+			for (int i = 0; i < 3; ++i)
+			{
+				if (touchInside(30, 42 + i * 46, 260, 38)) return i;
+			}
+			if (touchInside(30, 180, 260, 38)) return 3;
+		}
+		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		{
+			if (touchInside(25, 135, 120, 62)) return 0;
+			if (touchInside(175, 135, 120, 62)) return 1;
+		}
+		return -1;
+	}
+
+	void activateSettingsButton(int button)
+	{
+		if (settingsScreen == SettingsScreen::Main)
+		{
+			if (button == 0)
+				showSettingsScreen(SettingsScreen::ThemeSelection);
+			else if (button == 1)
+				showWifiResetConfirm();
+			else if (button == 2)
+				closeSettings();
+		}
+		else if (settingsScreen == SettingsScreen::ThemeSelection)
+		{
+			if (button >= 0 && button <= 2)
+			{
+				const DashboardTheme themes[] = {
+					DashboardTheme::Classic,
+					DashboardTheme::GT3,
+					DashboardTheme::Retro};
+				const DashboardTheme selectedTheme = themes[button];
+				const bool changed = selectedTheme != activeDashboardTheme;
+				settingsScreen = SettingsScreen::Closed;
+				wifiResetConfirmOpen = false;
+				settingsPressedButton = -1;
+				selectDashboardTheme(selectedTheme, true);
+				if (!changed) redrawAfterWifiResetDialog();
+			}
+			else if (button == 3)
+			{
+				showSettingsScreen(SettingsScreen::Main);
+			}
+		}
+		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		{
+			if (button == 0)
+			{
+				showSettingsScreen(SettingsScreen::Main);
+			}
+			else if (button == 1)
+			{
+				showWifiResettingScreen();
+				wifiResetRequested = true;
+			}
+		}
+	}
+
 	void readTouch()
+	{
+		if (!TOUCH_SCREEN_CONTROL_ENABLED)
+		{
+			return;
+		}
+
+		static bool wasTouched = false;
+		static bool longPressTriggered = false;
+		static bool waitForReleaseAfterScreenChange = false;
+		static unsigned long touchStartTime = 0;
+		const bool isTouched = tft.getTouch(&touchX, &touchY);
+
+		if (waitForReleaseAfterScreenChange)
+		{
+			if (!isTouched)
+			{
+				waitForReleaseAfterScreenChange = false;
+				wasTouched = false;
+			}
+			return;
+		}
+
+		if (settingsScreen != SettingsScreen::Closed)
+		{
+			if (!isTouched && settingsLastInteractionTime != 0 &&
+				millis() - settingsLastInteractionTime >= SETTINGS_TIMEOUT_MS)
+			{
+				closeSettings();
+				wasTouched = false;
+				return;
+			}
+
+			if (isTouched && !wasTouched)
+			{
+				settingsLastInteractionTime = millis();
+				settingsPressedButton = settingsButtonAtTouch();
+				if (settingsPressedButton >= 0)
+					redrawSettingsButton(settingsPressedButton, true);
+			}
+			else if (!isTouched && wasTouched)
+			{
+				settingsLastInteractionTime = millis();
+				const int releasedButton = settingsButtonAtTouch();
+				const int pressedButton = settingsPressedButton;
+				settingsPressedButton = -1;
+				if (pressedButton >= 0 && releasedButton == pressedButton)
+				{
+					activateSettingsButton(pressedButton);
+					waitForReleaseAfterScreenChange = true;
+				}
+				else if (pressedButton >= 0)
+				{
+					redrawSettingsButton(pressedButton, false);
+				}
+			}
+
+			wasTouched = isTouched;
+			return;
+		}
+
+		if (isTouched && !wasTouched)
+		{
+			touchStartTime = millis();
+			longPressTriggered = false;
+		}
+
+		if (isTouched && !longPressTriggered &&
+			millis() - touchStartTime >= SETTINGS_HOLD_MS)
+		{
+			longPressTriggered = true;
+			showSettingsScreen(SettingsScreen::Main);
+			waitForReleaseAfterScreenChange = true;
+			wasTouched = isTouched;
+			return;
+		}
+
+		if (!isTouched && wasTouched && !longPressTriggered)
+		{
+			if (screenSleeping)
+			{
+				screenSleeping = false;
+				screenOffByUser = false;
+				fadeScreenOn();
+				forceUpdate = true;
+				if (!previousGameRunning)
+				{
+					gameStoppedTimerStarted = true;
+					gameStoppedTime = millis();
+				}
+				else
+				{
+					gameStoppedTimerStarted = false;
+				}
+			}
+			else
+			{
+				screenOffByUser = true;
+				screenSleeping = true;
+				fadeScreenOff();
+				gameStoppedTimerStarted = false;
+			}
+		}
+
+		wasTouched = isTouched;
+	}
+
+#if 0
+	void readTouchLegacy()
 	{
 		if (!TOUCH_SCREEN_CONTROL_ENABLED)
 		{
@@ -3128,6 +3472,7 @@ public:
 
 		wasTouched = isTouched;
 	}
+#endif
 };
 
 #endif

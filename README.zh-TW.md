@@ -147,10 +147,11 @@ http://192.168.4.1
 
 - 手動熄屏／開屏。
 
-**長按（5 秒）**
+**長按（2 秒）**
 
-- 清除已儲存的 Wi-Fi 設定。
-- 重新進入 Wi-Fi 設定模式。
+- 開啟設定選單。
+- 選擇並儲存 Classic、GT3 或 Retro 儀表主題。
+- 透過獨立確認畫面重設已儲存的 Wi-Fi。
 
 <p align="center">
   <img src="photos/003.jpg" width="900" alt="ESP32 GT7 Dashboard">

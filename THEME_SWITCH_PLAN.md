@@ -7,7 +7,7 @@ This is a major UI architecture renovation. Work proceeds one phase at a time, a
 Overall progress:
 
 - [x] **Phase 1 — Theme infrastructure** — accepted on ST7789 hardware (2026-08-17)
-- [ ] **Phase 2 — Touch Settings and theme selection**
+- [x] **Phase 2 — Touch Settings and theme selection** — accepted on ST7789 and ILI9341 hardware (2026-08-17)
 - [ ] **Phase 3 — Classic 1.2.5 renderer**
 - [ ] **Phase 4 — Retro renderer**
 - [ ] **Phase 5 — Integration, regression testing and release**
@@ -297,6 +297,8 @@ Pass conditions:
 - [ ] Confirming Wi-Fi reset retains the currently expected reboot/setup behavior.
 
 Do not proceed until Settings can be operated repeatedly without accidental selection or lockout.
+
+**Acceptance record:** Phase 2 was accepted after the touch Settings flow, active-theme indication, persisted enum selection, GT3/Classic/Retro switching, Back navigation and Wi-Fi reset confirmation were exercised on both ST7789 and ILI9341 boards. Full-screen button feedback flicker and incomplete Connecting-screen redraw after theme switching were found during hardware testing and corrected before acceptance.
 
 ### Phase 3 — Classic Renderer
 
