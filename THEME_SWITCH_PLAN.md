@@ -9,7 +9,7 @@ Overall progress:
 - [x] **Phase 1 — Theme infrastructure** — accepted on ST7789 hardware (2026-08-17)
 - [x] **Phase 2 — Touch Settings and theme selection** — accepted on ST7789 and ILI9341 hardware (2026-08-17)
 - [x] **Phase 3 — Classic 1.2.5 renderer** — accepted on ST7789 hardware (2026-08-17)
-- [ ] **Phase 4 — Retro renderer**
+- [x] **Phase 4 — Retro renderer** — accepted on ST7789 hardware (2026-08-18)
 - [ ] **Phase 5 — Integration, regression testing and release**
 
 Working rule for every phase:
@@ -339,17 +339,19 @@ Use the supplied reference image as a style reference, not as a requirement to a
 
 Pass conditions:
 
-- [ ] The UI clearly reads as a warm gray, dark-text vintage instrument panel.
-- [ ] All current dashboard functions are present, with no additional unsupported functions.
-- [ ] Speed and gear remain readable at a glance on the 2.8-inch display.
-- [ ] Small labels and timing values remain legible from the normal driving position.
-- [ ] Dynamic values do not flicker, jump horizontally or leave background artifacts.
-- [ ] Positive/negative delta and shift warnings remain distinguishable without overpowering the monochrome style.
-- [ ] RPM fill, min-alert position and shift alert respond correctly for cars with different alert RPM ranges.
-- [ ] Switching among Retro, Classic and GT3 repeatedly produces complete, clean redraws.
-- [ ] Retro remains stable for at least one normal driving session.
+- [x] The UI clearly reads as a warm gray, dark-text vintage instrument panel.
+- [x] All current dashboard functions are present, with no additional unsupported functions.
+- [x] Speed and gear remain readable at a glance on the 2.8-inch display.
+- [x] Small labels and timing values remain legible from the normal driving position.
+- [x] Dynamic values do not flicker, jump horizontally or leave background artifacts.
+- [x] Positive/negative delta and shift warnings remain distinguishable without overpowering the monochrome style.
+- [x] RPM fill, min-alert position and shift alert respond correctly for cars with different alert RPM ranges.
+- [x] Switching among Retro, Classic and GT3 repeatedly produces complete, clean redraws.
+- [x] Retro remains stable for at least one normal driving session.
 
 Visual approval should be based on photographs of the actual display rather than desktop mockups alone.
+
+**Acceptance record:** Phase 4 was accepted after iterative ST7789 hardware testing. The final Retro palette uses a `#C6BA98` paper background with dark ink, restrained status accents and the existing telemetry semantics. RPM, speed, current-lap time, tyre temperatures and pedal bars use partial or buffered redraws to eliminate visible SPI clearing flicker. The supplied dashboard image was treated as a visual reference rather than a layout specification.
 
 ### Phase 5 — Integration and Release
 
