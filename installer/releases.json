@@ -6,8 +6,8 @@
         "Introduced the refined low-RAM GT3 dashboard UI."
       ],
       "manifests": {
-        "ili9341": "manifest.json",
-        "st7789": "manifest-st7789.json"
+        "ili9341": "versions/1.2.6/manifest-ili9341.json",
+        "st7789": "versions/1.2.6/manifest-st7789.json"
       }
     },
     {

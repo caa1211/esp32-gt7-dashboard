@@ -32,7 +32,7 @@ const manifestPaths = [
 const releasesPath = join(projectDirectory, "installer", "releases.json");
 const releaseNotesPath = join(projectDirectory, "installer", "release-notes.json");
 const versionsDirectory = join(projectDirectory, "installer", "versions");
-const retainedReleaseCount = 5;
+const retainedReleaseCount = 10;
 const versionPattern = /^\d+\.\d+\.\d+$/;
 
 function displayPath(path) {
