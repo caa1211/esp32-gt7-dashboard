@@ -9,6 +9,7 @@
 #include <lgfx_user/LGFX_ESP32_esp32-2432s028.hpp>
 //  dashboard + free deck grafica
 #include <Arduino.h>
+#include <Preferences.h>
 #include <map>
 #include <BleGamepad.h> // libreria bluetooth
 #include <GT7DerivedMetrics.h>
@@ -124,6 +125,62 @@ namespace DashboardLayout
 #define GT7_DASHBOARD_LEGACY_UI 0
 #endif
 
+// Stable persisted values. Never reorder or reuse an existing numeric value.
+enum class DashboardTheme : uint8_t
+{
+	Classic = 0,
+	GT3 = 1,
+	Retro = 2,
+};
+
+// Phase 1 renderer preview hook. Normal firmware loads the persisted theme;
+// development builds can set 0, 1 or 2 without modifying source or storage.
+#ifndef GT7_DASHBOARD_THEME_PREVIEW
+#define GT7_DASHBOARD_THEME_PREVIEW -1
+#endif
+
+// Canonical dashboard state shared by every renderer. Telemetry parsing and
+// derived-value logic update this state; themes decide only how to present it.
+struct DashboardState
+{
+	int rpmPercent = 50;
+	int prev_rpmPercent = 50;
+	int rpmRedLineSetting = 90;
+	int engineRpm = 0;
+	bool rpmAlertRangeValid = false;
+	bool revLimitAlertActive = false;
+	bool revLimitAlertWasActive = false;
+	bool rpmPulseWasActive = false;
+	uint8_t lastRpmPulseWhiteMix = 0;
+	uint32_t lastRpmPulseFrameTime = 0;
+	uint32_t rpmPulseStartTime = 0;
+	String gear = "N";
+	String prev_gear;
+	String speed = "0";
+	String currentLapTime = "00:00.00";
+	String lastLapTime = "00:00.00";
+	String bestLapTime = "00.00.00";
+	String sessionBestLiveDeltaSeconds = "+0.000";
+	String sessionBestLiveDeltaProgressSeconds = "0.00";
+	String tyrePressureFrontLeft = "00.0";
+	String tyrePressureFrontRight = "00.0";
+	String tyrePressureRearLeft = "00.0";
+	String fuelAlertActive = "False";
+	String tcLevel = "0";
+	String tcFilteredLevel = "0";
+	String tcActive = "0";
+	String absLevel = "0";
+	String absFilteredLevel = "0";
+	String absActive = "0";
+	String isTCCutNull = "True";
+	String tcTcCut = "0  0";
+	String brakeBias = "0";
+	String brake = "0";
+	String lapInvalidated = "False";
+	float tyreTemperatures[4] = {NAN, NAN, NAN, NAN};
+	String gameRunning = "False";
+};
+
 std::map<String, String> prevData;
 std::map<String, int32_t> prevColor;
 
@@ -186,62 +243,35 @@ static void showWifiSetupScreen()
 int currentPage = 1;	  // Variabile per tenere traccia della pagina corrente
 bool forceUpdate = false; // Variabile per forzare l'aggiornamento delle celle
 
-class SHCustomProtocol
+class SHCustomProtocol : private DashboardState
 {
 private:
-	// Global variables
-	int rpmPercent = 50;
-	int prev_rpmPercent = 50;
-	int rpmRedLineSetting = 90;
-	int engineRpm = 0;
-	bool rpmAlertRangeValid = false;
-	bool revLimitAlertActive = false;
-	bool revLimitAlertWasActive = false;
-	bool rpmPulseWasActive = false;
-	uint8_t lastRpmPulseWhiteMix = 0;
-	uint32_t lastRpmPulseFrameTime = 0;
-	uint32_t rpmPulseStartTime = 0;
-	String gear = "N";
-	String prev_gear;
-	String speed = "0";
-	String currentLapTime = "00:00.00";
-	String lastLapTime = "00:00.00";
-	String bestLapTime = "00.00.00";
-	String sessionBestLiveDeltaSeconds = "+0.000";
-	String sessionBestLiveDeltaProgressSeconds = "0.00";
-	String tyrePressureFrontLeft = "00.0";
-	String tyrePressureFrontRight = "00.0";
-	String tyrePressureRearLeft = "00.0";
-	String fuelAlertActive = "False";
-	String tcLevel = "0";
-	String tcFilteredLevel = "0";
-	String tcActive = "0";
-	String absLevel = "0";
-	String absFilteredLevel = "0";
-	String absActive = "0";
-	String isTCCutNull = "True";
-	String tcTcCut = "0  0";
-	String brakeBias = "0";
-	String brake = "0";
-	String lapInvalidated = "False";
-	float tyreTemperatures[4] = {NAN, NAN, NAN, NAN};
+	Preferences dashboardPreferences;
+	DashboardTheme activeDashboardTheme = DashboardTheme::GT3;
+	DashboardTheme renderedDashboardTheme = DashboardTheme::GT3;
+	bool dashboardPreferencesReady = false;
+
 	uint16_t touchX, touchY; // definisce i due interi per gestione touchscreen
 	int numButtons = 6;		 // Variabile per il numero di pulsanti
-
-	String gameRunning = "False";
 
 	static constexpr uint8_t FADE_STEP = 5;
 	static constexpr uint8_t FADE_DELAY_MS = 4;
 	static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 5UL * 60UL * 1000UL;
 	// static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 10000;
-	static constexpr uint8_t SCREEN_NORMAL_BRIGHTNESS = 255;
+	static constexpr uint8_t DEFAULT_BRIGHTNESS_PERCENT = 80;
+	static constexpr uint8_t MIN_BRIGHTNESS_PERCENT = 20;
+	static constexpr uint8_t BRIGHTNESS_STEP_PERCENT = 10;
+	static constexpr unsigned long BRIGHTNESS_SAVE_DELAY_MS = 750UL;
 	static constexpr bool TOUCH_SCREEN_CONTROL_ENABLED = true;
 
 	// Connecting 畫面動畫設定
 	static constexpr unsigned long CONNECT_ANIMATION_INTERVAL = 1000;
 	static constexpr int CONNECT_DOT_COUNT = 5;
 
-	uint8_t currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+	uint8_t userBrightnessPercent = DEFAULT_BRIGHTNESS_PERCENT;
+	uint8_t currentBrightness = 255;
+	bool brightnessSavePending = false;
+	unsigned long brightnessChangedTime = 0;
 	unsigned long gameStoppedTime = 0;
 
 	bool gameStoppedTimerStarted = false;
@@ -250,8 +280,20 @@ private:
 	// 是否由使用者手動關閉
 	bool screenOffByUser = false;
 
-	// 全螢幕長按 5 秒後顯示 Wi-Fi 重設確認畫面
-	static constexpr unsigned long WIFI_RESET_HOLD_MS = 5000UL;
+	// Tap the active dashboard to open the touch-driven Settings menu.
+	enum class SettingsScreen : uint8_t
+	{
+		Closed,
+		Main,
+		ThemeSelection,
+		DeviceSettings,
+		WifiResetConfirmation,
+	};
+
+	static constexpr unsigned long SETTINGS_TIMEOUT_MS = 15000UL;
+	SettingsScreen settingsScreen = SettingsScreen::Closed;
+	unsigned long settingsLastInteractionTime = 0;
+	int settingsPressedButton = -1;
 	bool wifiResetConfirmOpen = false;
 	bool wifiResetRequested = false;
 
@@ -260,6 +302,93 @@ private:
 
 	// 避免第一筆資料被誤判為狀態切換
 	bool gameRunningInitialized = false;
+
+	static bool isValidDashboardTheme(uint8_t value)
+	{
+		return value <= static_cast<uint8_t>(DashboardTheme::Retro);
+	}
+
+	static const char *dashboardThemeName(DashboardTheme theme)
+	{
+		switch (theme)
+		{
+		case DashboardTheme::Classic:
+			return "CLASSIC";
+		case DashboardTheme::Retro:
+			return "RETRO";
+		case DashboardTheme::GT3:
+		default:
+			return "GT3";
+		}
+	}
+
+	uint8_t normalBrightness() const
+	{
+		return static_cast<uint8_t>(
+			(userBrightnessPercent * 255U + 50U) / 100U);
+	}
+
+	void scheduleBrightnessSave()
+	{
+		brightnessSavePending = true;
+		brightnessChangedTime = millis();
+	}
+
+	void saveBrightnessIfDue()
+	{
+		if (!brightnessSavePending ||
+			millis() - brightnessChangedTime < BRIGHTNESS_SAVE_DELAY_MS)
+			return;
+		if (dashboardPreferencesReady)
+			dashboardPreferences.putUChar("brightness", userBrightnessPercent);
+		brightnessSavePending = false;
+	}
+
+	void invalidateDashboardRenderer()
+	{
+		tft.fillScreen(TFT_BLACK);
+		prevData.clear();
+		prevColor.clear();
+		prev_gear = "";
+		prev_rpmPercent = 50;
+		revLimitAlertWasActive = false;
+		rpmPulseWasActive = false;
+		lastRpmPulseWhiteMix = 0;
+		lastRpmPulseFrameTime = 0;
+		rpmPulseStartTime = millis();
+		connectingScreenActive = false;
+		connectingAnimationStep = 0;
+		lastConnectingAnimationTime = 0;
+		forceUpdate = true;
+	}
+
+	void loadDashboardTheme()
+	{
+		dashboardPreferencesReady = dashboardPreferences.begin("gt7dash", false);
+		uint8_t storedTheme = static_cast<uint8_t>(DashboardTheme::GT3);
+		if (dashboardPreferencesReady)
+		{
+			storedTheme = dashboardPreferences.getUChar(
+				"theme", static_cast<uint8_t>(DashboardTheme::GT3));
+			const uint8_t storedBrightness = dashboardPreferences.getUChar(
+				"brightness", DEFAULT_BRIGHTNESS_PERCENT);
+			userBrightnessPercent =
+				storedBrightness >= MIN_BRIGHTNESS_PERCENT && storedBrightness <= 100
+				? storedBrightness
+				: DEFAULT_BRIGHTNESS_PERCENT;
+		}
+
+		activeDashboardTheme = isValidDashboardTheme(storedTheme)
+			? static_cast<DashboardTheme>(storedTheme)
+			: DashboardTheme::GT3;
+
+#if GT7_DASHBOARD_THEME_PREVIEW >= 0 && GT7_DASHBOARD_THEME_PREVIEW <= 2
+		activeDashboardTheme =
+			static_cast<DashboardTheme>(GT7_DASHBOARD_THEME_PREVIEW);
+#endif
+
+		renderedDashboardTheme = activeDashboardTheme;
+	}
 
 #if INCLUDE_GT7_WIFI
 	// 最近一次真正收到新 GT7 UDP 封包的時間
@@ -397,9 +526,10 @@ public:
 	void setup()
 	{
 		tft.init();
+		loadDashboardTheme();
 		tft.setRotation(DASHBOARD_DISPLAY_ROTATION);
-		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
-		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+		tft.setBrightness(normalBrightness());
+		currentBrightness = normalBrightness();
 		tft.fillScreen(TFT_BLACK);
 		screenSleeping = false;
 		//    Serial.begin(115200);   //x debug
@@ -854,11 +984,12 @@ public:
 			fadeScreenOff();
 		}
 
-		// 暗屏時仍需讀取觸控，才能點擊喚醒或長按進入 Wi-Fi 重設。
+		// Keep reading touch while asleep so a tap can wake the display and a
+		// long press can open Settings.
 		readTouch();
 
 		// 確認畫面開啟時，不讓 Dashboard 或 Connecting 畫面蓋回來。
-		if (wifiResetConfirmOpen)
+		if (settingsScreen != SettingsScreen::Closed)
 		{
 			return;
 		}
@@ -900,13 +1031,15 @@ public:
 			lastPage = currentPage;
 		}
 
+		if (activeDashboardTheme != renderedDashboardTheme)
+		{
+			renderedDashboardTheme = activeDashboardTheme;
+			invalidateDashboardRenderer();
+		}
+
 		if (currentPage == 1)
 		{
-			#if GT7_DASHBOARD_LEGACY_UI
-			drawPage1Legacy(forceUpdate);
-			#else
-			drawPage1(forceUpdate);
-			#endif
+			renderDashboard(static_cast<const DashboardState &>(*this), forceUpdate);
 		}
 		else if (forceUpdate)
 		{
@@ -917,6 +1050,383 @@ public:
 	}
 
 	void idle() {}
+
+	void renderDashboard(const DashboardState &state, bool forceUpdate)
+	{
+		switch (activeDashboardTheme)
+		{
+		case DashboardTheme::Classic:
+			drawPage1Legacy(forceUpdate);
+			break;
+		case DashboardTheme::Retro:
+			drawRetroDashboard(state, forceUpdate);
+			break;
+		case DashboardTheme::GT3:
+		default:
+#if GT7_DASHBOARD_LEGACY_UI
+			drawPage1Legacy(forceUpdate);
+#else
+			drawPage1(forceUpdate);
+#endif
+			break;
+		}
+	}
+
+	static uint16_t blendRgb565(uint16_t from, uint16_t to, uint8_t amount)
+	{
+		const uint8_t fromR = ((from >> 11) & 0x1F) * 255 / 31;
+		const uint8_t fromG = ((from >> 5) & 0x3F) * 255 / 63;
+		const uint8_t fromB = (from & 0x1F) * 255 / 31;
+		const uint8_t toR = ((to >> 11) & 0x1F) * 255 / 31;
+		const uint8_t toG = ((to >> 5) & 0x3F) * 255 / 63;
+		const uint8_t toB = (to & 0x1F) * 255 / 31;
+		return tft.color565(
+			fromR + (toR - fromR) * amount / 255,
+			fromG + (toG - fromG) * amount / 255,
+			fromB + (toB - fromB) * amount / 255);
+	}
+
+	void drawRetroTextValue(int32_t x, int32_t y, int32_t width, int32_t height,
+		const String &value, const String &id, uint16_t color, uint8_t font,
+		textdatum_t datum, bool forceUpdate, float scaleX = 1.0f,
+		float scaleY = 1.0f)
+	{
+		const String state = value + ":" + String(color);
+		if (!forceUpdate && prevData[id] == state) return;
+		const uint16_t paper = tft.color565(198, 186, 152);
+		tft.fillRect(x, y, width, height, paper);
+		tft.setTextColor(color, paper);
+		tft.setTextDatum(datum);
+		tft.setTextSize(scaleX, scaleY);
+		const int32_t textX = datum == MR_DATUM ? x + width - 2
+			: (datum == MC_DATUM ? x + width / 2 : x + 2);
+		tft.drawString(value, textX, y + height / 2, font);
+		tft.setTextSize(1.0f);
+		tft.setTextDatum(TL_DATUM);
+		prevData[id] = state;
+	}
+
+	void drawRetroTextValueBuffered(int32_t x, int32_t y, int32_t width,
+		int32_t height, const String &value, const String &id, uint16_t color,
+		uint8_t font, textdatum_t datum, bool forceUpdate, LGFX_Sprite &sprite,
+		bool &spriteCreated, float scaleX = 1.0f, float scaleY = 1.0f)
+	{
+		const String cacheState = value + ":" + String(color);
+		if (!forceUpdate && prevData[id] == cacheState) return;
+		const uint16_t paper = tft.color565(198, 186, 152);
+		if (!spriteCreated)
+		{
+			sprite.setColorDepth(16);
+			spriteCreated = sprite.createSprite(width, height) != nullptr;
+		}
+		if (!spriteCreated)
+		{
+			drawRetroTextValue(x, y, width, height, value, id, color, font,
+				datum, true, scaleX, scaleY);
+			return;
+		}
+		sprite.fillSprite(paper);
+		sprite.setTextColor(color, paper);
+		sprite.setTextDatum(datum);
+		sprite.setTextSize(scaleX, scaleY);
+		const int32_t textX = datum == MR_DATUM ? width - 2
+			: (datum == MC_DATUM ? width / 2 : 2);
+		sprite.drawString(value, textX, height / 2, font);
+		sprite.setTextSize(1.0f);
+		sprite.pushSprite(x, y);
+		prevData[id] = cacheState;
+	}
+
+	void drawRetroRpm(const DashboardState &state, bool forceUpdate)
+	{
+		static constexpr int SEGMENT_COUNT = 28;
+		static constexpr int SEGMENT_X = 58;
+		static constexpr int SEGMENT_PITCH = 9;
+		static constexpr int SEGMENT_WIDTH = 7;
+		static constexpr int SEGMENT_Y = 24;
+		static constexpr int SEGMENT_HEIGHT = 17;
+		static constexpr float PULSE_HZ = 3.0f;
+		static constexpr uint32_t FRAME_MS = 24;
+		static int previousActive = -1;
+		static bool previousPulse = false;
+		static uint32_t pulseStart = 0;
+		static uint32_t lastFrame = 0;
+		static uint8_t previousMix = 0;
+
+		const uint16_t paper = tft.color565(198, 186, 152);
+		const uint16_t ink = tft.color565(25, 31, 29);
+		const uint16_t faint = tft.color565(118, 116, 103);
+		const uint16_t alert = tft.color565(178, 55, 39);
+		const int active = constrain(
+			(state.rpmPercent * SEGMENT_COUNT + 99) / 100, 0, SEGMENT_COUNT);
+		const bool warning = state.rpmAlertRangeValid &&
+			state.rpmPercent >= state.rpmRedLineSetting;
+		const bool pulse = warning || state.revLimitAlertActive;
+		const uint32_t now = millis();
+		const bool pulseStarted = pulse && !previousPulse;
+		if (pulseStarted) pulseStart = now;
+
+		uint8_t whiteMix = 0;
+		bool pulseFrame = false;
+		if (pulse && (pulseStarted || now - lastFrame >= FRAME_MS))
+		{
+			float peak = 0.30f;
+			if (warning)
+			{
+				const float span = max(1, 100 - state.rpmRedLineSetting);
+				const float progress = constrain(
+					(state.rpmPercent - state.rpmRedLineSetting) / span, 0.0f, 1.0f);
+				peak += 0.20f * progress;
+			}
+			if (state.revLimitAlertActive) peak = 0.62f;
+			const float elapsed = (now - pulseStart) / 1000.0f;
+			const float wave = 0.5f + 0.5f * cosf(TWO_PI * PULSE_HZ * elapsed);
+			whiteMix = static_cast<uint8_t>(lroundf(255.0f * peak * wave));
+			pulseFrame = pulseStarted || whiteMix != previousMix;
+			lastFrame = now;
+		}
+		else if (pulse)
+		{
+			whiteMix = previousMix;
+		}
+
+		const String alertState = String(state.rpmRedLineSetting) + ":" +
+			String(state.rpmAlertRangeValid ? 1 : 0);
+		const bool alertChanged = prevData["retroAlertRange"] != alertState;
+		const bool pulseEnded = !pulse && previousPulse;
+		if (forceUpdate || active != previousActive || alertChanged || pulseFrame || pulseEnded)
+		{
+			for (int i = 0; i < SEGMENT_COUNT; ++i)
+			{
+				const bool fillChanged = previousActive < 0 ||
+					(i >= min(active, previousActive) && i < max(active, previousActive));
+				const bool pulseChanged = i < active && (pulseFrame || pulseEnded);
+				if (!forceUpdate && !alertChanged && !fillChanged && !pulseChanged) continue;
+				const int x = SEGMENT_X + i * SEGMENT_PITCH;
+				tft.fillRect(x, SEGMENT_Y, SEGMENT_WIDTH, SEGMENT_HEIGHT, paper);
+				if (i < active)
+				{
+					const uint16_t color = pulse
+						? blendRgb565(ink, TFT_WHITE, whiteMix)
+						: ink;
+					tft.fillRect(x, SEGMENT_Y, SEGMENT_WIDTH, SEGMENT_HEIGHT, color);
+				}
+				else
+				{
+					tft.drawRect(x, SEGMENT_Y, SEGMENT_WIDTH, SEGMENT_HEIGHT, faint);
+				}
+			}
+
+			// The amber index marks the car-specific min-alert position.
+			tft.fillRect(SEGMENT_X - 4, 17,
+				SEGMENT_PITCH * (SEGMENT_COUNT - 1) + SEGMENT_WIDTH + 8, 6, paper);
+			if (state.rpmAlertRangeValid)
+			{
+				const float position = constrain(
+					state.rpmRedLineSetting / 100.0f, 0.0f, 1.0f);
+				const int markerX = SEGMENT_X + lroundf(
+					position * SEGMENT_PITCH * (SEGMENT_COUNT - 1)) + SEGMENT_WIDTH / 2;
+				tft.fillTriangle(markerX - 3, 17, markerX + 3, 17,
+					markerX, 22, alert);
+			}
+		}
+
+		const int displayedRpm = ((state.engineRpm + 25) / 50) * 50;
+		drawRetroTextValue(5, 25, 49, 20, String(displayedRpm), "retroRpm",
+			pulse ? alert : ink, 2, MC_DATUM, forceUpdate);
+		previousActive = active;
+		previousPulse = pulse;
+		previousMix = pulse ? whiteMix : 0;
+		prevData["retroAlertRange"] = alertState;
+	}
+
+	void drawRetroPedals(const DashboardState &state, bool forceUpdate)
+	{
+		const int brakeInput = constrain(state.absLevel.toInt(), 0, 100);
+		const int brakeApplied = constrain(state.absFilteredLevel.toInt(), 0, 100);
+		const int throttleInput = constrain(state.tcLevel.toInt(), 0, 100);
+		const int throttleApplied = constrain(state.tcFilteredLevel.toInt(), 0, 100);
+		const String value = String(brakeInput) + ":" + String(brakeApplied) + ":" +
+			String(throttleInput) + ":" + String(throttleApplied);
+		if (!forceUpdate && prevData["retroPedals"] == value) return;
+		const uint16_t paper = tft.color565(198, 186, 152);
+		const uint16_t ink = tft.color565(25, 31, 29);
+		const uint16_t faint = tft.color565(118, 116, 103);
+		const uint16_t applied = tft.color565(74, 93, 69);
+		static LGFX_Sprite pedalSprite(&tft);
+		static bool spriteCreated = false;
+		if (!spriteCreated)
+		{
+			pedalSprite.setColorDepth(16);
+			spriteCreated = pedalSprite.createSprite(93, 33) != nullptr;
+		}
+		if (!spriteCreated) return;
+		pedalSprite.fillSprite(paper);
+		pedalSprite.setTextColor(ink, paper);
+		pedalSprite.setTextDatum(TL_DATUM);
+		pedalSprite.drawString("B", 8, 4, 1);
+		pedalSprite.drawString("T", 8, 17, 1);
+		const int barX = 21;
+		const int barW = 68;
+		const int barH = 7;
+		const int values[2][2] = {
+			{brakeInput, brakeApplied}, {throttleInput, throttleApplied}};
+		for (int row = 0; row < 2; ++row)
+		{
+			const int y = 7 + row * 13;
+			pedalSprite.drawRect(barX, y, barW, barH, faint);
+			const int inputW = (barW - 2) * values[row][0] / 100;
+			const int appliedW = (barW - 2) * values[row][1] / 100;
+			if (inputW > 0) pedalSprite.fillRect(barX + 1, y + 1, inputW, barH - 2, ink);
+			if (appliedW > 0) pedalSprite.fillRect(barX + 1, y + 1, appliedW, barH - 2, applied);
+		}
+		pedalSprite.pushSprite(143, 204);
+		prevData["retroPedals"] = value;
+	}
+
+	void drawRetroDashboard(const DashboardState &state, bool forceUpdate)
+	{
+		static LGFX_Sprite speedSprite(&tft);
+		static LGFX_Sprite currentSprite(&tft);
+		static LGFX_Sprite tyreSprite(&tft);
+		static bool speedSpriteCreated = false;
+		static bool currentSpriteCreated = false;
+		static bool tyreSpriteCreated = false;
+		const uint16_t paper = tft.color565(198, 186, 152);
+		const uint16_t ink = tft.color565(25, 31, 29);
+		const uint16_t faint = tft.color565(118, 116, 103);
+		const uint16_t green = tft.color565(55, 102, 64);
+		const uint16_t red = tft.color565(178, 55, 39);
+
+		if (forceUpdate)
+		{
+			tft.fillScreen(paper);
+			tft.setTextPadding(0);
+			tft.setTextSize(1.0f);
+			tft.setTextDatum(TL_DATUM);
+			tft.setTextColor(ink, paper);
+
+			// Compact industrial panel grid, sized for the 320 x 240 display.
+			tft.drawRoundRect(2, 2, 316, 47, 4, ink);
+			tft.drawRoundRect(2, 52, 94, 106, 4, ink);
+			tft.drawRoundRect(99, 52, 84, 106, 4, ink);
+			tft.drawRoundRect(186, 52, 132, 106, 4, ink);
+			tft.drawFastHLine(186, 87, 132, faint);
+			tft.drawFastHLine(186, 122, 132, faint);
+			tft.drawRoundRect(2, 161, 316, 39, 4, ink);
+			tft.drawFastVLine(80, 161, 39, faint);
+			tft.drawFastVLine(157, 161, 39, faint);
+			tft.drawFastVLine(237, 161, 39, faint);
+			tft.drawRoundRect(2, 203, 316, 35, 4, ink);
+			tft.drawFastVLine(142, 203, 35, faint);
+			tft.drawFastVLine(237, 203, 35, faint);
+
+			tft.drawString("RPM", 8, 8, 2);
+			tft.drawString("SPEED", 8, 59, 2);
+			tft.drawString("km/h", 61, 143, 1);
+			tft.drawCentreString("GEAR", 141, 59, 2);
+			tft.drawString("BEST", 192, 57, 1);
+			tft.drawString("LAST", 192, 92, 1);
+			tft.drawString("CURRENT", 192, 127, 1);
+			tft.drawString("FUEL", 8, 166, 1);
+			tft.drawString("REM", 86, 166, 1);
+			tft.drawString("LAP", 163, 166, 1);
+			tft.drawString("POS", 243, 166, 1);
+			tft.drawString("TYRE TEMP C", 8, 207, 1);
+			tft.drawString("ABS", 243, 208, 1);
+			tft.drawString("TCS", 243, 223, 1);
+		}
+
+		drawRetroRpm(state, forceUpdate);
+		drawRetroTextValueBuffered(7, 77, 84, 62, state.speed, "retroSpeed", ink,
+			7, MC_DATUM, forceUpdate, speedSprite, speedSpriteCreated, 0.72f, 0.82f);
+		drawRetroTextValue(104, 76, 74, 72, state.gear, "retroGear", ink,
+			7, MC_DATUM, forceUpdate, 1.20f, 1.22f);
+
+		// Keep labels and values on separate rows. Fractionally scaled bitmap fonts
+		// produced malformed glyphs on the 2.8-inch panel, so Retro uses native sizes.
+		drawRetroTextValue(190, 68, 124, 17, state.bestLapTime, "retroBest", ink,
+			2, MR_DATUM, forceUpdate);
+		drawRetroTextValue(190, 103, 124, 17, state.lastLapTime, "retroLast", ink,
+			2, MR_DATUM, forceUpdate);
+		const uint16_t currentColor = state.lapInvalidated == "True" ? red : ink;
+		drawRetroTextValueBuffered(190, 136, 124, 12, state.currentLapTime,
+			"retroCurrent", currentColor, 1, MR_DATUM, forceUpdate,
+			currentSprite, currentSpriteCreated);
+
+		uint16_t deltaColor = ink;
+		if (state.sessionBestLiveDeltaSeconds.startsWith("-")) deltaColor = green;
+		else if (state.sessionBestLiveDeltaSeconds.startsWith("+") &&
+			state.sessionBestLiveDeltaSeconds != "+0.000") deltaColor = red;
+		drawRetroTextValue(190, 148, 124, 8, state.sessionBestLiveDeltaSeconds,
+			"retroDelta", deltaColor, 1, MR_DATUM, forceUpdate);
+
+		drawRetroTextValue(7, 177, 68, 18, state.brakeBias, "retroFuel", ink,
+			2, MC_DATUM, forceUpdate, 0.9f, 0.95f);
+		drawRetroTextValue(85, 177, 67, 18, state.tyrePressureFrontLeft, "retroRem", ink,
+			2, MC_DATUM, forceUpdate, 0.9f, 0.95f);
+		String lap = state.tyrePressureRearLeft;
+		lap.replace("/", "/");
+		drawRetroTextValue(162, 177, 70, 18, lap, "retroLap", ink,
+			2, MC_DATUM, forceUpdate, 0.78f, 0.95f);
+		drawRetroTextValue(242, 177, 70, 18, state.tyrePressureFrontRight, "retroPos", ink,
+			2, MC_DATUM, forceUpdate, 0.9f, 0.95f);
+
+		String tyres;
+		const char *names[] = {"FL", "FR", "RL", "RR"};
+		for (int i = 0; i < 4; ++i)
+		{
+			if (i > 0) tyres += " ";
+			tyres += names[i];
+			tyres += isnan(state.tyreTemperatures[i])
+				? "--" : String(lroundf(state.tyreTemperatures[i]));
+		}
+		drawRetroTextValueBuffered(6, 218, 132, 16, tyres, "retroTyres", ink,
+			1, MC_DATUM, forceUpdate, tyreSprite, tyreSpriteCreated);
+		drawRetroPedals(state, forceUpdate);
+		drawRetroTextValue(273, 205, 40, 15,
+			isActiveValue(state.absActive) ? "ON" : "--", "retroAbs",
+			isActiveValue(state.absActive) ? red : faint, 1, MC_DATUM, forceUpdate);
+		drawRetroTextValue(273, 220, 40, 15,
+			isActiveValue(state.tcActive) ? "ON" : "--", "retroTcs",
+			isActiveValue(state.tcActive) ? red : faint, 1, MC_DATUM, forceUpdate);
+	}
+
+	void drawThemePlaceholder(
+		const DashboardState &state,
+		DashboardTheme theme,
+		bool forceUpdate)
+	{
+		const String cacheKey = theme == DashboardTheme::Classic
+			? "classicPlaceholder"
+			: "retroPlaceholder";
+		const String liveState = state.speed + ":" + state.gear + ":" +
+			String(state.engineRpm);
+		if (!forceUpdate && prevData[cacheKey] == liveState)
+		{
+			return;
+		}
+
+		if (forceUpdate)
+		{
+			tft.fillScreen(TFT_BLACK);
+			tft.setTextPadding(0);
+			tft.setTextDatum(MC_DATUM);
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawCentreString(dashboardThemeName(theme), X_CENTER, 70, 4);
+			tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+			tft.drawCentreString("PHASE 1 RENDERER", X_CENTER, 105, 2);
+			tft.drawCentreString("UI COMING IN A LATER PHASE", X_CENTER, 130, 1);
+		}
+
+		tft.fillRect(30, 160, SCREEN_WIDTH - 60, 38, TFT_BLACK);
+		tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+		tft.setTextDatum(MC_DATUM);
+		const String telemetryLine = state.speed + " km/h   GEAR " + state.gear +
+			"   " + String(state.engineRpm) + " RPM";
+		tft.drawCentreString(telemetryLine, X_CENTER, 176, 2);
+		prevData[cacheKey] = liveState;
+	}
 
 	void drawConnectingScreenBase()
 	{
@@ -954,15 +1464,8 @@ public:
 			barHeight,
 			tft.color565(28, 28, 28));
 
-		char text[40];
-		snprintf(
-			text,
-			sizeof(text),
-			"Touch & hold %lus to change WiFi",
-			static_cast<unsigned long>(WIFI_RESET_HOLD_MS / 1000UL));
-
 		tft.drawCentreString(
-			text,
+			"Tap for settings",
 			SCREEN_WIDTH / 2,
 			SCREEN_HEIGHT - 26,
 			1);
@@ -1255,6 +1758,39 @@ public:
 		drawCompactStatus(DashboardLayout::BOTTOM_X[5] + 2, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[5] - 6, DashboardLayout::BOTTOM_VALUE_H,
 			"gt3Tcs", tcsOn, tft.color565(0, 200, 255), forceUpdate);
+	}
+
+	DashboardTheme getDashboardTheme() const
+	{
+		return activeDashboardTheme;
+	}
+
+	const DashboardState &getDashboardState() const
+	{
+		return static_cast<const DashboardState &>(*this);
+	}
+
+	bool selectDashboardTheme(DashboardTheme theme, bool persist = true)
+	{
+		const uint8_t value = static_cast<uint8_t>(theme);
+		if (!isValidDashboardTheme(value))
+		{
+			return false;
+		}
+
+		if (persist && dashboardPreferencesReady)
+		{
+			dashboardPreferences.putUChar("theme", value);
+		}
+
+		if (activeDashboardTheme != theme)
+		{
+			activeDashboardTheme = theme;
+			renderedDashboardTheme = theme;
+			invalidateDashboardRenderer();
+		}
+
+		return true;
 	}
 
 	void drawMeasuredText(const String &value, int32_t x, int32_t y,
@@ -1839,7 +2375,9 @@ public:
 			CELL_WIDTH * 2 - 2,
 			CELL_HEIGHT - 1,
 			constrain(tcLevel.toInt(), 0, 100),
+			constrain(tcFilteredLevel.toInt(), 0, 100),
 			constrain(absLevel.toInt(), 0, 100),
+			constrain(absFilteredLevel.toInt(), 0, 100),
 			forceUpdate);
 
 		// ABS、TCS 狀態與油量
@@ -2019,17 +2557,25 @@ public:
 		const int segmentWidth =
 			(innerWidth - totalGapWidth) / segmentCount;
 
+		const int markerX = rpmAlertRangeValid
+			? innerX + lroundf((innerWidth - 1) *
+				constrain(rpmRedLineSetting / 100.0f, 0.0f, 1.0f))
+			: -1;
+		const int previousMarkerX = prevData["classicMinAlertMarkerX"].toInt();
+		const bool markerChanged = markerX != previousMarkerX;
+		const bool fullRedraw = forceUpdate || markerChanged;
+
 		/*
 		 * 首次繪製或切回主畫面時：
 		 * 清一次內部，再完整畫出目前的 Bar。
 		 */
-		if (forceUpdate)
+		if (fullRedraw)
 		{
 			tft.fillRect(
-				innerX,
-				innerY,
-				innerWidth,
-				innerHeight,
+				x,
+				y,
+				width,
+				frameHeight + 10,
 				TFT_BLACK);
 
 			previousActiveSegments = 0;
@@ -2117,7 +2663,19 @@ public:
 		 * 例如 51% → 54% 都是同樣格數，畫面完全不更新。
 		 */
 
+		if (markerX >= 0)
+		{
+			const uint16_t markerColor = tft.color565(255, 52, 42);
+			const int arrowTipY = y + frameHeight + 1;
+			tft.drawFastVLine(markerX, y, arrowTipY - y + 1, markerColor);
+			tft.fillTriangle(markerX, arrowTipY,
+				markerX - 6, y + frameHeight + 9,
+				markerX + 6, y + frameHeight + 9,
+				markerColor);
+		}
+
 		prev_rpmPercent = safeRpmPercent;
+		prevData["classicMinAlertMarkerX"] = String(markerX);
 	}
 
 	void drawRpmMeter2(int32_t x, int32_t y, int width, int height)
@@ -2491,11 +3049,15 @@ public:
 		int32_t totalWidth,
 		int32_t totalHeight,
 		int throttlePercent,
+		int throttleAppliedPercent,
 		int brakePercent,
+		int brakeAppliedPercent,
 		bool forceUpdate = false)
 	{
 		throttlePercent = constrain(throttlePercent, 0, 100);
+		throttleAppliedPercent = constrain(throttleAppliedPercent, 0, 100);
 		brakePercent = constrain(brakePercent, 0, 100);
+		brakeAppliedPercent = constrain(brakeAppliedPercent, 0, 100);
 
 		// 上下兩格，而不是左右兩格。
 		const int32_t gap = 2;
@@ -2506,16 +3068,54 @@ public:
 		auto updateOneCell = [&](
 								 int32_t cellY,
 								 int percent,
+								 int appliedPercent,
 								 const char *id,
 								 uint16_t color)
 		{
-			const bool firstDraw = prevData.count(id) == 0;
-			const int oldPercent = firstDraw
-									   ? 0
-									   : constrain(prevData[id].toInt(), 0, 100);
+			const String state = String(percent) + ":" + String(appliedPercent);
+			const bool firstDraw = true;
+			const int oldPercent = 0;
+			const uint16_t inputColor = color == TFT_YELLOW
+				? tft.color565(255, 245, 150)
+				: tft.color565(110, 170, 255);
 
-			if (!forceUpdate && !firstDraw && oldPercent == percent)
+			if (!forceUpdate && prevData[id] == state)
 			{
+				return;
+			}
+
+			const int32_t spriteInset = 2;
+			const int32_t spriteFillWidth = totalWidth - spriteInset * 2;
+			const int32_t spriteFillHeight = cellHeight - spriteInset * 2;
+			const int32_t spriteInputFill = spriteFillWidth * percent / 100;
+			const int32_t spriteAppliedFill = spriteFillWidth * appliedPercent / 100;
+			static LGFX_Sprite classicPedalSprite(&tft);
+			static int32_t spriteWidth = 0;
+			static int32_t spriteHeight = 0;
+			if (spriteWidth != totalWidth || spriteHeight != cellHeight)
+			{
+				classicPedalSprite.deleteSprite();
+				classicPedalSprite.setColorDepth(16);
+				if (classicPedalSprite.createSprite(totalWidth, cellHeight) != nullptr)
+				{
+					spriteWidth = totalWidth;
+					spriteHeight = cellHeight;
+				}
+			}
+
+			if (spriteWidth == totalWidth && spriteHeight == cellHeight)
+			{
+				classicPedalSprite.fillSprite(TFT_BLACK);
+				if (spriteInputFill > 0)
+					classicPedalSprite.fillRect(spriteInset, spriteInset,
+						spriteInputFill, spriteFillHeight, inputColor);
+				if (spriteAppliedFill > 0)
+					classicPedalSprite.fillRect(spriteInset, spriteInset,
+						spriteAppliedFill, spriteFillHeight, color);
+				classicPedalSprite.drawRoundRect(0, 0, totalWidth, cellHeight, 5,
+					TFT_DARKGREY);
+				classicPedalSprite.pushSprite(x, cellY);
+				prevData[id] = state;
 				return;
 			}
 
@@ -2536,7 +3136,8 @@ public:
 
 				if (newFill > 0)
 				{
-					tft.fillRect(fillX, fillY, newFill, fillHeight, color);
+					tft.fillRect(fillX, fillY, newFill, fillHeight,
+						inputColor);
 				}
 			}
 			else if (newFill > oldFill)
@@ -2547,7 +3148,7 @@ public:
 					fillY,
 					newFill - oldFill,
 					fillHeight,
-					color);
+					inputColor);
 			}
 			else if (newFill < oldFill)
 			{
@@ -2561,12 +3162,19 @@ public:
 			}
 
 			// 保險重畫邊框，避免填色蓋到外框。
+			const int32_t appliedFill = fillWidthMax * appliedPercent / 100;
+			if (appliedFill > 0)
+			{
+				tft.fillRect(fillX, fillY, appliedFill, fillHeight, color);
+			}
 			tft.drawRoundRect(x, cellY, totalWidth, cellHeight, 5, TFT_DARKGREY);
-			prevData[id] = String(percent);
+			prevData[id] = state;
 		};
 
-		updateOneCell(throttleY, throttlePercent, "pedalThrottle", TFT_YELLOW);
-		updateOneCell(brakeY, brakePercent, "pedalBrake", TFT_BLUE);
+		updateOneCell(throttleY, throttlePercent, throttleAppliedPercent,
+			"pedalThrottle", TFT_YELLOW);
+		updateOneCell(brakeY, brakePercent, brakeAppliedPercent,
+			"pedalBrake", TFT_BLUE);
 	}
 
 	void drawCell(
@@ -2756,7 +3364,7 @@ public:
 
 	void fadeScreenOn()
 	{
-		fadeToBrightness(SCREEN_NORMAL_BRIGHTNESS);
+		fadeToBrightness(normalBrightness());
 	}
 
 	void fadeScreenOff()
@@ -2776,13 +3384,211 @@ public:
 		forceUpdate = true;
 	}
 
+	bool touchInside(int x, int y, int width, int height) const
+	{
+		return touchX >= x && touchX < x + width &&
+			touchY >= y && touchY < y + height;
+	}
+
+	void drawSettingsButton(
+		int x,
+		int y,
+		int width,
+		int height,
+		const String &label,
+		bool pressed,
+		bool active = false,
+		bool destructive = false)
+	{
+		const uint16_t normalFill = destructive
+			? tft.color565(92, 24, 28)
+			: active
+				? tft.color565(18, 74, 104)
+				: tft.color565(42, 46, 52);
+		const uint16_t fill = pressed ? tft.color565(38, 126, 150) : normalFill;
+		const uint16_t border = active ? TFT_WHITE : TFT_LIGHTGREY;
+		tft.fillRoundRect(x, y, width, height, 7, fill);
+		tft.drawRoundRect(x, y, width, height, 7, border);
+		if (active)
+			tft.drawRoundRect(x + 1, y + 1, width - 2, height - 2, 6, border);
+		tft.setTextColor(TFT_WHITE, fill);
+		tft.setTextDatum(MC_DATUM);
+		tft.drawString(label, x + width / 2, y + height / 2, 2);
+	}
+
+	void drawDeviceBrightnessValue()
+	{
+		static LGFX_Sprite brightnessSprite(&tft);
+		static bool spriteCreated = false;
+		if (!spriteCreated)
+		{
+			brightnessSprite.setColorDepth(16);
+			spriteCreated = brightnessSprite.createSprite(116, 48) != nullptr;
+		}
+		if (spriteCreated)
+		{
+			brightnessSprite.fillSprite(TFT_BLACK);
+			brightnessSprite.setTextColor(TFT_WHITE, TFT_BLACK);
+			brightnessSprite.setTextDatum(MC_DATUM);
+			brightnessSprite.drawString(
+				String(userBrightnessPercent) + "%", 58, 24, 4);
+			brightnessSprite.pushSprite(102, 72);
+		}
+		else
+		{
+			tft.fillRect(102, 72, 116, 48, TFT_BLACK);
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.setTextDatum(MC_DATUM);
+			tft.drawString(String(userBrightnessPercent) + "%", X_CENTER, 96, 4);
+		}
+	}
+
+	void drawSettingsScreen(int pressedButton = -1)
+	{
+		tft.fillScreen(TFT_BLACK);
+		tft.setTextPadding(0);
+		tft.setTextDatum(MC_DATUM);
+
+		if (settingsScreen == SettingsScreen::Main)
+		{
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawString("SETTINGS", X_CENTER, 25, 4);
+			drawSettingsButton(30, 55, 260, 48, "SELECT THEME", pressedButton == 0);
+			drawSettingsButton(30, 113, 260, 48, "DEVICE SETTINGS", pressedButton == 1);
+			drawSettingsButton(30, 171, 260, 48, "BACK", pressedButton == 2);
+		}
+		else if (settingsScreen == SettingsScreen::ThemeSelection)
+		{
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawString("SELECT THEME", X_CENTER, 22, 4);
+			const DashboardTheme themes[] = {
+				DashboardTheme::Classic,
+				DashboardTheme::GT3,
+				DashboardTheme::Retro};
+			for (int i = 0; i < 3; ++i)
+			{
+				const bool active = activeDashboardTheme == themes[i];
+				String label = dashboardThemeName(themes[i]);
+				if (active) label += "  [ACTIVE]";
+				drawSettingsButton(30, 42 + i * 46, 260, 38, label,
+					pressedButton == i, active);
+			}
+			drawSettingsButton(30, 180, 260, 38, "BACK", pressedButton == 3);
+		}
+		else if (settingsScreen == SettingsScreen::DeviceSettings)
+		{
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawString("DEVICE SETTINGS", X_CENTER, 20, 4);
+			tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+			tft.drawString("BRIGHTNESS", X_CENTER, 53, 2);
+			drawSettingsButton(30, 72, 70, 48, "-", pressedButton == 0);
+			drawSettingsButton(220, 72, 70, 48, "+", pressedButton == 1);
+			drawDeviceBrightnessValue();
+			drawSettingsButton(30, 132, 260, 38, "RESET WIFI", pressedButton == 2,
+				false, true);
+			drawSettingsButton(30, 182, 260, 38, "BACK", pressedButton == 3);
+		}
+		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		{
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawString("Reset saved Wi-Fi?", X_CENTER, 60, 4);
+			tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+			tft.drawString("Device will restart", X_CENTER, 95, 2);
+			drawSettingsButton(25, 135, 120, 62, "CANCEL", pressedButton == 0);
+			drawSettingsButton(175, 135, 120, 62, "RESET", pressedButton == 1,
+				false, true);
+		}
+
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	void redrawSettingsButton(int button, bool pressed)
+	{
+		if (settingsScreen == SettingsScreen::Main)
+		{
+			if (button == 0)
+				drawSettingsButton(30, 55, 260, 48, "SELECT THEME", pressed);
+			else if (button == 1)
+				drawSettingsButton(30, 113, 260, 48, "DEVICE SETTINGS", pressed);
+			else if (button == 2)
+				drawSettingsButton(30, 171, 260, 48, "BACK", pressed);
+		}
+		else if (settingsScreen == SettingsScreen::ThemeSelection)
+		{
+			if (button >= 0 && button <= 2)
+			{
+				const DashboardTheme themes[] = {
+					DashboardTheme::Classic,
+					DashboardTheme::GT3,
+					DashboardTheme::Retro};
+				const bool active = activeDashboardTheme == themes[button];
+				String label = dashboardThemeName(themes[button]);
+				if (active) label += "  [ACTIVE]";
+				drawSettingsButton(30, 42 + button * 46, 260, 38, label,
+					pressed, active);
+			}
+			else if (button == 3)
+			{
+				drawSettingsButton(30, 180, 260, 38, "BACK", pressed);
+			}
+		}
+		else if (settingsScreen == SettingsScreen::DeviceSettings)
+		{
+			if (button == 0)
+				drawSettingsButton(30, 72, 70, 48, "-", pressed);
+			else if (button == 1)
+				drawSettingsButton(220, 72, 70, 48, "+", pressed);
+			else if (button == 2)
+				drawSettingsButton(30, 132, 260, 38, "RESET WIFI", pressed,
+					false, true);
+			else if (button == 3)
+				drawSettingsButton(30, 182, 260, 38, "BACK", pressed);
+		}
+		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		{
+			if (button == 0)
+				drawSettingsButton(25, 135, 120, 62, "CANCEL", pressed);
+			else if (button == 1)
+				drawSettingsButton(175, 135, 120, 62, "RESET", pressed,
+					false, true);
+		}
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	void showSettingsScreen(SettingsScreen screen)
+	{
+		screenSleeping = false;
+		screenOffByUser = false;
+		tft.setBrightness(normalBrightness());
+		currentBrightness = normalBrightness();
+		settingsScreen = screen;
+		wifiResetConfirmOpen = screen == SettingsScreen::WifiResetConfirmation;
+		settingsPressedButton = -1;
+		settingsLastInteractionTime = millis();
+		drawSettingsScreen();
+	}
+
+	void closeSettings()
+	{
+		settingsScreen = SettingsScreen::Closed;
+		wifiResetConfirmOpen = false;
+		settingsPressedButton = -1;
+		redrawAfterWifiResetDialog();
+	}
+
 	void showWifiResetConfirm()
+	{
+		showSettingsScreen(SettingsScreen::WifiResetConfirmation);
+	}
+
+#if 0
+	void showWifiResetConfirmLegacy()
 	{
 		// 即使原本處於暗屏，也要先亮起確認畫面。
 		screenSleeping = false;
 		screenOffByUser = false;
-		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
-		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+		tft.setBrightness(normalBrightness());
+		currentBrightness = normalBrightness();
 
 		tft.fillScreen(TFT_BLACK);
 		tft.setTextPadding(0);
@@ -2813,6 +3619,8 @@ public:
 		tft.setTextDatum(TL_DATUM);
 	}
 
+#endif
+
 	void showWifiResettingScreen()
 	{
 		tft.fillScreen(TFT_BLACK);
@@ -2839,7 +3647,192 @@ public:
 		return true;
 	}
 
+	int settingsButtonAtTouch() const
+	{
+		if (settingsScreen == SettingsScreen::Main)
+		{
+			if (touchInside(30, 55, 260, 48)) return 0;
+			if (touchInside(30, 113, 260, 48)) return 1;
+			if (touchInside(30, 171, 260, 48)) return 2;
+		}
+		else if (settingsScreen == SettingsScreen::ThemeSelection)
+		{
+			for (int i = 0; i < 3; ++i)
+			{
+				if (touchInside(30, 42 + i * 46, 260, 38)) return i;
+			}
+			if (touchInside(30, 180, 260, 38)) return 3;
+		}
+		else if (settingsScreen == SettingsScreen::DeviceSettings)
+		{
+			if (touchInside(30, 72, 70, 48)) return 0;
+			if (touchInside(220, 72, 70, 48)) return 1;
+			if (touchInside(30, 132, 260, 38)) return 2;
+			if (touchInside(30, 182, 260, 38)) return 3;
+		}
+		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		{
+			if (touchInside(25, 135, 120, 62)) return 0;
+			if (touchInside(175, 135, 120, 62)) return 1;
+		}
+		return -1;
+	}
+
+	void activateSettingsButton(int button)
+	{
+		if (settingsScreen == SettingsScreen::Main)
+		{
+			if (button == 0)
+				showSettingsScreen(SettingsScreen::ThemeSelection);
+			else if (button == 1)
+				showSettingsScreen(SettingsScreen::DeviceSettings);
+			else if (button == 2)
+				closeSettings();
+		}
+		else if (settingsScreen == SettingsScreen::ThemeSelection)
+		{
+			if (button >= 0 && button <= 2)
+			{
+				const DashboardTheme themes[] = {
+					DashboardTheme::Classic,
+					DashboardTheme::GT3,
+					DashboardTheme::Retro};
+				const DashboardTheme selectedTheme = themes[button];
+				const bool changed = selectedTheme != activeDashboardTheme;
+				settingsScreen = SettingsScreen::Closed;
+				wifiResetConfirmOpen = false;
+				settingsPressedButton = -1;
+				selectDashboardTheme(selectedTheme, true);
+				if (!changed) redrawAfterWifiResetDialog();
+			}
+			else if (button == 3)
+			{
+				showSettingsScreen(SettingsScreen::Main);
+			}
+		}
+		else if (settingsScreen == SettingsScreen::DeviceSettings)
+		{
+			if (button == 0 || button == 1)
+			{
+				const int adjustment = button == 0
+					? -BRIGHTNESS_STEP_PERCENT
+					: BRIGHTNESS_STEP_PERCENT;
+				userBrightnessPercent = constrain(
+					static_cast<int>(userBrightnessPercent) + adjustment,
+					static_cast<int>(MIN_BRIGHTNESS_PERCENT), 100);
+				tft.setBrightness(normalBrightness());
+				currentBrightness = normalBrightness();
+				scheduleBrightnessSave();
+				settingsLastInteractionTime = millis();
+				drawDeviceBrightnessValue();
+			}
+			else if (button == 2)
+			{
+				showWifiResetConfirm();
+			}
+			else if (button == 3)
+			{
+				showSettingsScreen(SettingsScreen::Main);
+			}
+		}
+		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		{
+			if (button == 0)
+			{
+				showSettingsScreen(SettingsScreen::DeviceSettings);
+			}
+			else if (button == 1)
+			{
+				showWifiResettingScreen();
+				wifiResetRequested = true;
+			}
+		}
+	}
+
 	void readTouch()
+	{
+		saveBrightnessIfDue();
+		if (!TOUCH_SCREEN_CONTROL_ENABLED)
+		{
+			return;
+		}
+
+		static bool wasTouched = false;
+		static bool waitForReleaseAfterScreenChange = false;
+		const bool isTouched = tft.getTouch(&touchX, &touchY);
+
+		if (waitForReleaseAfterScreenChange)
+		{
+			if (!isTouched)
+			{
+				waitForReleaseAfterScreenChange = false;
+				wasTouched = false;
+			}
+			return;
+		}
+
+		if (settingsScreen != SettingsScreen::Closed)
+		{
+			if (!isTouched && settingsLastInteractionTime != 0 &&
+				millis() - settingsLastInteractionTime >= SETTINGS_TIMEOUT_MS)
+			{
+				closeSettings();
+				wasTouched = false;
+				return;
+			}
+
+			if (isTouched && !wasTouched)
+			{
+				settingsLastInteractionTime = millis();
+				settingsPressedButton = settingsButtonAtTouch();
+			}
+			else if (!isTouched && wasTouched)
+			{
+				settingsLastInteractionTime = millis();
+				const int releasedButton = settingsButtonAtTouch();
+				const int pressedButton = settingsPressedButton;
+				settingsPressedButton = -1;
+				if (pressedButton >= 0 && releasedButton == pressedButton)
+				{
+					activateSettingsButton(pressedButton);
+					waitForReleaseAfterScreenChange = true;
+				}
+			}
+
+			wasTouched = isTouched;
+			return;
+		}
+
+		if (!isTouched && wasTouched)
+		{
+			if (screenSleeping)
+			{
+				screenSleeping = false;
+				screenOffByUser = false;
+				fadeScreenOn();
+				forceUpdate = true;
+				if (!previousGameRunning)
+				{
+					gameStoppedTimerStarted = true;
+					gameStoppedTime = millis();
+				}
+				else
+				{
+					gameStoppedTimerStarted = false;
+				}
+			}
+			else
+			{
+				showSettingsScreen(SettingsScreen::Main);
+				waitForReleaseAfterScreenChange = true;
+			}
+		}
+
+		wasTouched = isTouched;
+	}
+
+#if 0
+	void readTouchLegacy()
 	{
 		if (!TOUCH_SCREEN_CONTROL_ENABLED)
 		{
@@ -2955,6 +3948,7 @@ public:
 
 		wasTouched = isTouched;
 	}
+#endif
 };
 
 #endif
