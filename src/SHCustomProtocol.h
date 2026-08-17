@@ -9,6 +9,7 @@
 #include <lgfx_user/LGFX_ESP32_esp32-2432s028.hpp>
 //  dashboard + free deck grafica
 #include <Arduino.h>
+#include <Preferences.h>
 #include <map>
 #include <BleGamepad.h> // libreria bluetooth
 #include <GT7DerivedMetrics.h>
@@ -124,6 +125,62 @@ namespace DashboardLayout
 #define GT7_DASHBOARD_LEGACY_UI 0
 #endif
 
+// Stable persisted values. Never reorder or reuse an existing numeric value.
+enum class DashboardTheme : uint8_t
+{
+	Classic = 0,
+	GT3 = 1,
+	Retro = 2,
+};
+
+// Phase 1 renderer preview hook. Normal firmware loads the persisted theme;
+// development builds can set 0, 1 or 2 without modifying source or storage.
+#ifndef GT7_DASHBOARD_THEME_PREVIEW
+#define GT7_DASHBOARD_THEME_PREVIEW -1
+#endif
+
+// Canonical dashboard state shared by every renderer. Telemetry parsing and
+// derived-value logic update this state; themes decide only how to present it.
+struct DashboardState
+{
+	int rpmPercent = 50;
+	int prev_rpmPercent = 50;
+	int rpmRedLineSetting = 90;
+	int engineRpm = 0;
+	bool rpmAlertRangeValid = false;
+	bool revLimitAlertActive = false;
+	bool revLimitAlertWasActive = false;
+	bool rpmPulseWasActive = false;
+	uint8_t lastRpmPulseWhiteMix = 0;
+	uint32_t lastRpmPulseFrameTime = 0;
+	uint32_t rpmPulseStartTime = 0;
+	String gear = "N";
+	String prev_gear;
+	String speed = "0";
+	String currentLapTime = "00:00.00";
+	String lastLapTime = "00:00.00";
+	String bestLapTime = "00.00.00";
+	String sessionBestLiveDeltaSeconds = "+0.000";
+	String sessionBestLiveDeltaProgressSeconds = "0.00";
+	String tyrePressureFrontLeft = "00.0";
+	String tyrePressureFrontRight = "00.0";
+	String tyrePressureRearLeft = "00.0";
+	String fuelAlertActive = "False";
+	String tcLevel = "0";
+	String tcFilteredLevel = "0";
+	String tcActive = "0";
+	String absLevel = "0";
+	String absFilteredLevel = "0";
+	String absActive = "0";
+	String isTCCutNull = "True";
+	String tcTcCut = "0  0";
+	String brakeBias = "0";
+	String brake = "0";
+	String lapInvalidated = "False";
+	float tyreTemperatures[4] = {NAN, NAN, NAN, NAN};
+	String gameRunning = "False";
+};
+
 std::map<String, String> prevData;
 std::map<String, int32_t> prevColor;
 
@@ -186,49 +243,16 @@ static void showWifiSetupScreen()
 int currentPage = 1;	  // Variabile per tenere traccia della pagina corrente
 bool forceUpdate = false; // Variabile per forzare l'aggiornamento delle celle
 
-class SHCustomProtocol
+class SHCustomProtocol : private DashboardState
 {
 private:
-	// Global variables
-	int rpmPercent = 50;
-	int prev_rpmPercent = 50;
-	int rpmRedLineSetting = 90;
-	int engineRpm = 0;
-	bool rpmAlertRangeValid = false;
-	bool revLimitAlertActive = false;
-	bool revLimitAlertWasActive = false;
-	bool rpmPulseWasActive = false;
-	uint8_t lastRpmPulseWhiteMix = 0;
-	uint32_t lastRpmPulseFrameTime = 0;
-	uint32_t rpmPulseStartTime = 0;
-	String gear = "N";
-	String prev_gear;
-	String speed = "0";
-	String currentLapTime = "00:00.00";
-	String lastLapTime = "00:00.00";
-	String bestLapTime = "00.00.00";
-	String sessionBestLiveDeltaSeconds = "+0.000";
-	String sessionBestLiveDeltaProgressSeconds = "0.00";
-	String tyrePressureFrontLeft = "00.0";
-	String tyrePressureFrontRight = "00.0";
-	String tyrePressureRearLeft = "00.0";
-	String fuelAlertActive = "False";
-	String tcLevel = "0";
-	String tcFilteredLevel = "0";
-	String tcActive = "0";
-	String absLevel = "0";
-	String absFilteredLevel = "0";
-	String absActive = "0";
-	String isTCCutNull = "True";
-	String tcTcCut = "0  0";
-	String brakeBias = "0";
-	String brake = "0";
-	String lapInvalidated = "False";
-	float tyreTemperatures[4] = {NAN, NAN, NAN, NAN};
+	Preferences dashboardPreferences;
+	DashboardTheme activeDashboardTheme = DashboardTheme::GT3;
+	DashboardTheme renderedDashboardTheme = DashboardTheme::GT3;
+	bool dashboardPreferencesReady = false;
+
 	uint16_t touchX, touchY; // definisce i due interi per gestione touchscreen
 	int numButtons = 6;		 // Variabile per il numero di pulsanti
-
-	String gameRunning = "False";
 
 	static constexpr uint8_t FADE_STEP = 5;
 	static constexpr uint8_t FADE_DELAY_MS = 4;
@@ -260,6 +284,62 @@ private:
 
 	// 避免第一筆資料被誤判為狀態切換
 	bool gameRunningInitialized = false;
+
+	static bool isValidDashboardTheme(uint8_t value)
+	{
+		return value <= static_cast<uint8_t>(DashboardTheme::Retro);
+	}
+
+	static const char *dashboardThemeName(DashboardTheme theme)
+	{
+		switch (theme)
+		{
+		case DashboardTheme::Classic:
+			return "CLASSIC";
+		case DashboardTheme::Retro:
+			return "RETRO";
+		case DashboardTheme::GT3:
+		default:
+			return "GT3";
+		}
+	}
+
+	void invalidateDashboardRenderer()
+	{
+		tft.fillScreen(TFT_BLACK);
+		prevData.clear();
+		prevColor.clear();
+		prev_gear = "";
+		prev_rpmPercent = 50;
+		revLimitAlertWasActive = false;
+		rpmPulseWasActive = false;
+		lastRpmPulseWhiteMix = 0;
+		lastRpmPulseFrameTime = 0;
+		rpmPulseStartTime = millis();
+		forceUpdate = true;
+	}
+
+	void loadDashboardTheme()
+	{
+		dashboardPreferencesReady = dashboardPreferences.begin("gt7dash", false);
+		uint8_t storedTheme = static_cast<uint8_t>(DashboardTheme::GT3);
+		if (dashboardPreferencesReady)
+		{
+			storedTheme = dashboardPreferences.getUChar(
+				"theme", static_cast<uint8_t>(DashboardTheme::GT3));
+		}
+
+		activeDashboardTheme = isValidDashboardTheme(storedTheme)
+			? static_cast<DashboardTheme>(storedTheme)
+			: DashboardTheme::GT3;
+
+#if GT7_DASHBOARD_THEME_PREVIEW >= 0 && GT7_DASHBOARD_THEME_PREVIEW <= 2
+		activeDashboardTheme =
+			static_cast<DashboardTheme>(GT7_DASHBOARD_THEME_PREVIEW);
+#endif
+
+		renderedDashboardTheme = activeDashboardTheme;
+	}
 
 #if INCLUDE_GT7_WIFI
 	// 最近一次真正收到新 GT7 UDP 封包的時間
@@ -397,6 +477,7 @@ public:
 	void setup()
 	{
 		tft.init();
+		loadDashboardTheme();
 		tft.setRotation(DASHBOARD_DISPLAY_ROTATION);
 		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
 		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
@@ -900,13 +981,15 @@ public:
 			lastPage = currentPage;
 		}
 
+		if (activeDashboardTheme != renderedDashboardTheme)
+		{
+			renderedDashboardTheme = activeDashboardTheme;
+			invalidateDashboardRenderer();
+		}
+
 		if (currentPage == 1)
 		{
-			#if GT7_DASHBOARD_LEGACY_UI
-			drawPage1Legacy(forceUpdate);
-			#else
-			drawPage1(forceUpdate);
-			#endif
+			renderDashboard(static_cast<const DashboardState &>(*this), forceUpdate);
 		}
 		else if (forceUpdate)
 		{
@@ -917,6 +1000,63 @@ public:
 	}
 
 	void idle() {}
+
+	void renderDashboard(const DashboardState &state, bool forceUpdate)
+	{
+		switch (activeDashboardTheme)
+		{
+		case DashboardTheme::Classic:
+			drawThemePlaceholder(state, DashboardTheme::Classic, forceUpdate);
+			break;
+		case DashboardTheme::Retro:
+			drawThemePlaceholder(state, DashboardTheme::Retro, forceUpdate);
+			break;
+		case DashboardTheme::GT3:
+		default:
+#if GT7_DASHBOARD_LEGACY_UI
+			drawPage1Legacy(forceUpdate);
+#else
+			drawPage1(forceUpdate);
+#endif
+			break;
+		}
+	}
+
+	void drawThemePlaceholder(
+		const DashboardState &state,
+		DashboardTheme theme,
+		bool forceUpdate)
+	{
+		const String cacheKey = theme == DashboardTheme::Classic
+			? "classicPlaceholder"
+			: "retroPlaceholder";
+		const String liveState = state.speed + ":" + state.gear + ":" +
+			String(state.engineRpm);
+		if (!forceUpdate && prevData[cacheKey] == liveState)
+		{
+			return;
+		}
+
+		if (forceUpdate)
+		{
+			tft.fillScreen(TFT_BLACK);
+			tft.setTextPadding(0);
+			tft.setTextDatum(MC_DATUM);
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawCentreString(dashboardThemeName(theme), X_CENTER, 70, 4);
+			tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+			tft.drawCentreString("PHASE 1 RENDERER", X_CENTER, 105, 2);
+			tft.drawCentreString("UI COMING IN A LATER PHASE", X_CENTER, 130, 1);
+		}
+
+		tft.fillRect(30, 160, SCREEN_WIDTH - 60, 38, TFT_BLACK);
+		tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+		tft.setTextDatum(MC_DATUM);
+		const String telemetryLine = state.speed + " km/h   GEAR " + state.gear +
+			"   " + String(state.engineRpm) + " RPM";
+		tft.drawCentreString(telemetryLine, X_CENTER, 176, 2);
+		prevData[cacheKey] = liveState;
+	}
 
 	void drawConnectingScreenBase()
 	{
@@ -1255,6 +1395,39 @@ public:
 		drawCompactStatus(DashboardLayout::BOTTOM_X[5] + 2, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[5] - 6, DashboardLayout::BOTTOM_VALUE_H,
 			"gt3Tcs", tcsOn, tft.color565(0, 200, 255), forceUpdate);
+	}
+
+	DashboardTheme getDashboardTheme() const
+	{
+		return activeDashboardTheme;
+	}
+
+	const DashboardState &getDashboardState() const
+	{
+		return static_cast<const DashboardState &>(*this);
+	}
+
+	bool selectDashboardTheme(DashboardTheme theme, bool persist = true)
+	{
+		const uint8_t value = static_cast<uint8_t>(theme);
+		if (!isValidDashboardTheme(value))
+		{
+			return false;
+		}
+
+		if (persist && dashboardPreferencesReady)
+		{
+			dashboardPreferences.putUChar("theme", value);
+		}
+
+		if (activeDashboardTheme != theme)
+		{
+			activeDashboardTheme = theme;
+			renderedDashboardTheme = theme;
+			invalidateDashboardRenderer();
+		}
+
+		return true;
 	}
 
 	void drawMeasuredText(const String &value, int32_t x, int32_t y,

@@ -1,5 +1,7 @@
 # ESP32 GT7 Dashboard ([線上安裝](https://caa1211.github.io/esp32-gt7-dashboard/))
 
+> **開發規畫：** Classic、GT3 與 Retro 多主題 UI 翻新進度、分階段流程及實機驗收項目記錄於 [THEME_SWITCH_PLAN.md](THEME_SWITCH_PLAN.md)。
+
 一個專為 **Gran Turismo 7** 打造、完全運行於 **ESP32** 的獨立儀表板。
 
 **不需要 SimHub • 不需要 PC • 自動搜尋 PS5**

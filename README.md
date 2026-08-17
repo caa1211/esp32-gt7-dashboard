@@ -1,6 +1,8 @@
 
 # ESP32 GT7 Dashboard ([Installer](https://caa1211.github.io/esp32-gt7-dashboard/))
 
+> **Development roadmap:** The multi-theme UI renovation (Classic, GT3 and Retro) is tracked in [THEME_SWITCH_PLAN.md](THEME_SWITCH_PLAN.md), including phase-by-phase progress and hardware acceptance checks.
+
 A standalone **Gran Turismo 7 dashboard** running entirely on an ESP32.
 No SimHub • No PC • Auto PS5 Discovery
 
