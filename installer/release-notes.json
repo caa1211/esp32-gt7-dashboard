@@ -2,6 +2,7 @@
   "1.3.0": [
     "Added switchable GT3, Classic, and Retro dashboard themes with persistent on-device selection; GT3 remains the default.",
     "Added the touch Settings menu: tap an active display to open Settings, or tap a sleeping display to wake it.",
+    "Added Device Settings with persistent 20–100% brightness control and protected Wi-Fi reset access.",
     "Refined the Classic min-alert RPM marker and increased Retro gear readability."
   ],
   "1.2.7": [

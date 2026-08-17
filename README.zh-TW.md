@@ -1,5 +1,7 @@
 # ESP32 GT7 Dashboard ([線上安裝](https://caa1211.github.io/esp32-gt7-dashboard/))
 
+[English](README.md) | [繁體中文](README.zh-TW.md)
+
 > **主題開發：** 架構、開發流程與實機驗收項目請參考[主題開發指南](docs/THEME_DEVELOPMENT.md)及[實作規畫](docs/THEME_SWITCH_PLAN.md)。
 
 一個專為 **Gran Turismo 7** 打造、完全運行於 **ESP32** 的獨立儀表板。
@@ -78,7 +80,7 @@
 - **Classic** — 原本偏工程風格的五欄儀表板。
 - **Retro** — 暖色紙張底、深色文字與低調提示色的復古儀表板。
 
-螢幕亮起時點一下，選擇 **SELECT THEME**，再選取需要的主題。主題會以固定 enum 值儲存並在重新開機後恢復；重設 Wi-Fi 不會清除主題設定。
+螢幕亮起時點一下，選擇 **SELECT THEME**，再選取需要的主題。主題會以固定 enum 值儲存並在重新開機後恢復；重設 Wi-Fi 不會清除主題或亮度設定。
 
 <p align="center">
   <img src="photos/1.25and1.26_cht.png" width="900" alt="GT7 Dashboard 韌體 1.2.5 與 1.2.6 外觀比較">
@@ -149,7 +151,10 @@ http://192.168.4.1
 - 螢幕亮起時開啟設定選單。
 - 螢幕休眠時只喚醒顯示，第一次點擊不會同時進入設定。
 - 選擇並儲存 Classic、GT3 或 Retro 儀表主題。
-- 透過獨立確認畫面重設已儲存的 Wi-Fi。
+- 進入 **DEVICE SETTINGS**，以 10% 級距調整 20%～100% 的亮度。
+- 從 Device Settings 透過獨立確認畫面重設已儲存的 Wi-Fi。
+
+亮度預設為 80%，調整後會儲存，重新開機或喚醒時會恢復；自動休眠仍會完全關閉背光。
 
 沒有儲存過主題時會使用 GT3。Classic、GT3 與 Retro 顯示相同的支援遙測資料，只有呈現方式不同。
 

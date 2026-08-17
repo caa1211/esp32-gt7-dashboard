@@ -258,14 +258,20 @@ private:
 	static constexpr uint8_t FADE_DELAY_MS = 4;
 	static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 5UL * 60UL * 1000UL;
 	// static constexpr unsigned long SCREEN_SLEEP_TIMEOUT = 10000;
-	static constexpr uint8_t SCREEN_NORMAL_BRIGHTNESS = 255;
+	static constexpr uint8_t DEFAULT_BRIGHTNESS_PERCENT = 80;
+	static constexpr uint8_t MIN_BRIGHTNESS_PERCENT = 20;
+	static constexpr uint8_t BRIGHTNESS_STEP_PERCENT = 10;
+	static constexpr unsigned long BRIGHTNESS_SAVE_DELAY_MS = 750UL;
 	static constexpr bool TOUCH_SCREEN_CONTROL_ENABLED = true;
 
 	// Connecting 畫面動畫設定
 	static constexpr unsigned long CONNECT_ANIMATION_INTERVAL = 1000;
 	static constexpr int CONNECT_DOT_COUNT = 5;
 
-	uint8_t currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+	uint8_t userBrightnessPercent = DEFAULT_BRIGHTNESS_PERCENT;
+	uint8_t currentBrightness = 255;
+	bool brightnessSavePending = false;
+	unsigned long brightnessChangedTime = 0;
 	unsigned long gameStoppedTime = 0;
 
 	bool gameStoppedTimerStarted = false;
@@ -274,12 +280,13 @@ private:
 	// 是否由使用者手動關閉
 	bool screenOffByUser = false;
 
-	// Long-press the dashboard to open the touch-driven Settings menu.
+	// Tap the active dashboard to open the touch-driven Settings menu.
 	enum class SettingsScreen : uint8_t
 	{
 		Closed,
 		Main,
 		ThemeSelection,
+		DeviceSettings,
 		WifiResetConfirmation,
 	};
 
@@ -315,6 +322,28 @@ private:
 		}
 	}
 
+	uint8_t normalBrightness() const
+	{
+		return static_cast<uint8_t>(
+			(userBrightnessPercent * 255U + 50U) / 100U);
+	}
+
+	void scheduleBrightnessSave()
+	{
+		brightnessSavePending = true;
+		brightnessChangedTime = millis();
+	}
+
+	void saveBrightnessIfDue()
+	{
+		if (!brightnessSavePending ||
+			millis() - brightnessChangedTime < BRIGHTNESS_SAVE_DELAY_MS)
+			return;
+		if (dashboardPreferencesReady)
+			dashboardPreferences.putUChar("brightness", userBrightnessPercent);
+		brightnessSavePending = false;
+	}
+
 	void invalidateDashboardRenderer()
 	{
 		tft.fillScreen(TFT_BLACK);
@@ -341,6 +370,12 @@ private:
 		{
 			storedTheme = dashboardPreferences.getUChar(
 				"theme", static_cast<uint8_t>(DashboardTheme::GT3));
+			const uint8_t storedBrightness = dashboardPreferences.getUChar(
+				"brightness", DEFAULT_BRIGHTNESS_PERCENT);
+			userBrightnessPercent =
+				storedBrightness >= MIN_BRIGHTNESS_PERCENT && storedBrightness <= 100
+				? storedBrightness
+				: DEFAULT_BRIGHTNESS_PERCENT;
 		}
 
 		activeDashboardTheme = isValidDashboardTheme(storedTheme)
@@ -493,8 +528,8 @@ public:
 		tft.init();
 		loadDashboardTheme();
 		tft.setRotation(DASHBOARD_DISPLAY_ROTATION);
-		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
-		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+		tft.setBrightness(normalBrightness());
+		currentBrightness = normalBrightness();
 		tft.fillScreen(TFT_BLACK);
 		screenSleeping = false;
 		//    Serial.begin(115200);   //x debug
@@ -3329,7 +3364,7 @@ public:
 
 	void fadeScreenOn()
 	{
-		fadeToBrightness(SCREEN_NORMAL_BRIGHTNESS);
+		fadeToBrightness(normalBrightness());
 	}
 
 	void fadeScreenOff()
@@ -3381,6 +3416,33 @@ public:
 		tft.drawString(label, x + width / 2, y + height / 2, 2);
 	}
 
+	void drawDeviceBrightnessValue()
+	{
+		static LGFX_Sprite brightnessSprite(&tft);
+		static bool spriteCreated = false;
+		if (!spriteCreated)
+		{
+			brightnessSprite.setColorDepth(16);
+			spriteCreated = brightnessSprite.createSprite(116, 48) != nullptr;
+		}
+		if (spriteCreated)
+		{
+			brightnessSprite.fillSprite(TFT_BLACK);
+			brightnessSprite.setTextColor(TFT_WHITE, TFT_BLACK);
+			brightnessSprite.setTextDatum(MC_DATUM);
+			brightnessSprite.drawString(
+				String(userBrightnessPercent) + "%", 58, 24, 4);
+			brightnessSprite.pushSprite(102, 72);
+		}
+		else
+		{
+			tft.fillRect(102, 72, 116, 48, TFT_BLACK);
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.setTextDatum(MC_DATUM);
+			tft.drawString(String(userBrightnessPercent) + "%", X_CENTER, 96, 4);
+		}
+	}
+
 	void drawSettingsScreen(int pressedButton = -1)
 	{
 		tft.fillScreen(TFT_BLACK);
@@ -3392,8 +3454,7 @@ public:
 			tft.setTextColor(TFT_WHITE, TFT_BLACK);
 			tft.drawString("SETTINGS", X_CENTER, 25, 4);
 			drawSettingsButton(30, 55, 260, 48, "SELECT THEME", pressedButton == 0);
-			drawSettingsButton(30, 113, 260, 48, "RESET WIFI", pressedButton == 1,
-				false, true);
+			drawSettingsButton(30, 113, 260, 48, "DEVICE SETTINGS", pressedButton == 1);
 			drawSettingsButton(30, 171, 260, 48, "BACK", pressedButton == 2);
 		}
 		else if (settingsScreen == SettingsScreen::ThemeSelection)
@@ -3413,6 +3474,19 @@ public:
 					pressedButton == i, active);
 			}
 			drawSettingsButton(30, 180, 260, 38, "BACK", pressedButton == 3);
+		}
+		else if (settingsScreen == SettingsScreen::DeviceSettings)
+		{
+			tft.setTextColor(TFT_WHITE, TFT_BLACK);
+			tft.drawString("DEVICE SETTINGS", X_CENTER, 20, 4);
+			tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+			tft.drawString("BRIGHTNESS", X_CENTER, 53, 2);
+			drawSettingsButton(30, 72, 70, 48, "-", pressedButton == 0);
+			drawSettingsButton(220, 72, 70, 48, "+", pressedButton == 1);
+			drawDeviceBrightnessValue();
+			drawSettingsButton(30, 132, 260, 38, "RESET WIFI", pressedButton == 2,
+				false, true);
+			drawSettingsButton(30, 182, 260, 38, "BACK", pressedButton == 3);
 		}
 		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
 		{
@@ -3435,8 +3509,7 @@ public:
 			if (button == 0)
 				drawSettingsButton(30, 55, 260, 48, "SELECT THEME", pressed);
 			else if (button == 1)
-				drawSettingsButton(30, 113, 260, 48, "RESET WIFI", pressed,
-					false, true);
+				drawSettingsButton(30, 113, 260, 48, "DEVICE SETTINGS", pressed);
 			else if (button == 2)
 				drawSettingsButton(30, 171, 260, 48, "BACK", pressed);
 		}
@@ -3459,6 +3532,18 @@ public:
 				drawSettingsButton(30, 180, 260, 38, "BACK", pressed);
 			}
 		}
+		else if (settingsScreen == SettingsScreen::DeviceSettings)
+		{
+			if (button == 0)
+				drawSettingsButton(30, 72, 70, 48, "-", pressed);
+			else if (button == 1)
+				drawSettingsButton(220, 72, 70, 48, "+", pressed);
+			else if (button == 2)
+				drawSettingsButton(30, 132, 260, 38, "RESET WIFI", pressed,
+					false, true);
+			else if (button == 3)
+				drawSettingsButton(30, 182, 260, 38, "BACK", pressed);
+		}
 		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
 		{
 			if (button == 0)
@@ -3474,8 +3559,8 @@ public:
 	{
 		screenSleeping = false;
 		screenOffByUser = false;
-		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
-		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+		tft.setBrightness(normalBrightness());
+		currentBrightness = normalBrightness();
 		settingsScreen = screen;
 		wifiResetConfirmOpen = screen == SettingsScreen::WifiResetConfirmation;
 		settingsPressedButton = -1;
@@ -3502,8 +3587,8 @@ public:
 		// 即使原本處於暗屏，也要先亮起確認畫面。
 		screenSleeping = false;
 		screenOffByUser = false;
-		tft.setBrightness(SCREEN_NORMAL_BRIGHTNESS);
-		currentBrightness = SCREEN_NORMAL_BRIGHTNESS;
+		tft.setBrightness(normalBrightness());
+		currentBrightness = normalBrightness();
 
 		tft.fillScreen(TFT_BLACK);
 		tft.setTextPadding(0);
@@ -3578,6 +3663,13 @@ public:
 			}
 			if (touchInside(30, 180, 260, 38)) return 3;
 		}
+		else if (settingsScreen == SettingsScreen::DeviceSettings)
+		{
+			if (touchInside(30, 72, 70, 48)) return 0;
+			if (touchInside(220, 72, 70, 48)) return 1;
+			if (touchInside(30, 132, 260, 38)) return 2;
+			if (touchInside(30, 182, 260, 38)) return 3;
+		}
 		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
 		{
 			if (touchInside(25, 135, 120, 62)) return 0;
@@ -3593,7 +3685,7 @@ public:
 			if (button == 0)
 				showSettingsScreen(SettingsScreen::ThemeSelection);
 			else if (button == 1)
-				showWifiResetConfirm();
+				showSettingsScreen(SettingsScreen::DeviceSettings);
 			else if (button == 2)
 				closeSettings();
 		}
@@ -3618,11 +3710,36 @@ public:
 				showSettingsScreen(SettingsScreen::Main);
 			}
 		}
+		else if (settingsScreen == SettingsScreen::DeviceSettings)
+		{
+			if (button == 0 || button == 1)
+			{
+				const int adjustment = button == 0
+					? -BRIGHTNESS_STEP_PERCENT
+					: BRIGHTNESS_STEP_PERCENT;
+				userBrightnessPercent = constrain(
+					static_cast<int>(userBrightnessPercent) + adjustment,
+					static_cast<int>(MIN_BRIGHTNESS_PERCENT), 100);
+				tft.setBrightness(normalBrightness());
+				currentBrightness = normalBrightness();
+				scheduleBrightnessSave();
+				settingsLastInteractionTime = millis();
+				drawDeviceBrightnessValue();
+			}
+			else if (button == 2)
+			{
+				showWifiResetConfirm();
+			}
+			else if (button == 3)
+			{
+				showSettingsScreen(SettingsScreen::Main);
+			}
+		}
 		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
 		{
 			if (button == 0)
 			{
-				showSettingsScreen(SettingsScreen::Main);
+				showSettingsScreen(SettingsScreen::DeviceSettings);
 			}
 			else if (button == 1)
 			{
@@ -3634,6 +3751,7 @@ public:
 
 	void readTouch()
 	{
+		saveBrightnessIfDue();
 		if (!TOUCH_SCREEN_CONTROL_ENABLED)
 		{
 			return;
@@ -3667,8 +3785,6 @@ public:
 			{
 				settingsLastInteractionTime = millis();
 				settingsPressedButton = settingsButtonAtTouch();
-				if (settingsPressedButton >= 0)
-					redrawSettingsButton(settingsPressedButton, true);
 			}
 			else if (!isTouched && wasTouched)
 			{
@@ -3680,10 +3796,6 @@ public:
 				{
 					activateSettingsButton(pressedButton);
 					waitForReleaseAfterScreenChange = true;
-				}
-				else if (pressedButton >= 0)
-				{
-					redrawSettingsButton(pressedButton, false);
 				}
 			}
 

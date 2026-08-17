@@ -22,6 +22,8 @@ The included themes are:
 
 Persisted values are part of the device settings format. Never reorder or reuse an existing enum value.
 
+Display brightness is stored separately in the same `gt7dash` Preferences namespace. It uses a validated percentage (`20`–`100`) rather than a menu index. Changes are applied immediately and written after a short idle delay to avoid unnecessary flash writes. Wi-Fi reset must not clear theme or brightness preferences.
+
 ## Data available to renderers
 
 `DashboardState` is the renderer contract. It includes:
@@ -101,7 +103,7 @@ For each display controller, verify:
 - low, mid and alert-range RPM behavior
 - repeated switching among all themes
 - saved theme restoration after power cycling
-- Settings Back and timeout behavior
+- Settings Back, Device Settings brightness and timeout behavior
 - Wi-Fi reset Cancel and confirmation
 - automatic sleep, tap-to-wake and active-screen tap-to-Settings behavior
 - no visible flicker in high-frequency fields
