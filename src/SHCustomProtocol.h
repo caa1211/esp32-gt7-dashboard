@@ -1462,7 +1462,7 @@ public:
 		if (!spriteCreated)
 		{
 			pedalSprite.setColorDepth(16);
-			spriteCreated = pedalSprite.createSprite(58, 30) != nullptr;
+			spriteCreated = pedalSprite.createSprite(56, 24) != nullptr;
 		}
 		if (!spriteCreated) return;
 		const uint16_t frame = tft.color565(70, 74, 78);
@@ -1471,31 +1471,92 @@ public:
 		pedalSprite.fillSprite(TFT_BLACK);
 		pedalSprite.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
 		pedalSprite.setTextDatum(TL_DATUM);
-		pedalSprite.drawString("B", 0, 2, 1);
-		pedalSprite.drawString("T", 0, 17, 1);
+		pedalSprite.drawString("B", 0, 1, 1);
+		pedalSprite.drawString("T", 0, 13, 1);
 		const int values[2][2] = {
 			{brakeInput, brakeApplied}, {throttleInput, throttleApplied}};
 		for (int row = 0; row < 2; ++row)
 		{
-			const int y = 3 + row * 15;
-			pedalSprite.drawRect(10, y, 47, 8, frame);
-			const int inputWidth = 45 * values[row][0] / 100;
-			const int appliedWidth = 45 * values[row][1] / 100;
+			const int y = 2 + row * 12;
+			pedalSprite.drawRect(10, y, 45, 7, frame);
+			const int inputWidth = 43 * values[row][0] / 100;
+			const int appliedWidth = 43 * values[row][1] / 100;
 			if (inputWidth > 0)
-				pedalSprite.fillRect(11, y + 1, inputWidth, 6, input);
+				pedalSprite.fillRect(11, y + 1, inputWidth, 5, input);
 			if (appliedWidth > 0)
-				pedalSprite.fillRect(11, y + 1, appliedWidth, 6, applied);
+				pedalSprite.fillRect(11, y + 1, appliedWidth, 5, applied);
 		}
-		pedalSprite.pushSprite(256, 168);
+		pedalSprite.pushSprite(258, 171);
 		prevData["radarPedals"] = cacheState;
+	}
+
+	void drawRadarTyres(const DashboardState &state, bool forceUpdate,
+		LGFX_Sprite &sprite, bool &spriteCreated)
+	{
+		String cacheState;
+		for (int i = 0; i < 4; ++i)
+		{
+			if (i > 0) cacheState += ":";
+			cacheState += isnan(state.tyreTemperatures[i])
+				? "--" : String(lroundf(state.tyreTemperatures[i]));
+		}
+		if (!forceUpdate && prevData["radarTyres"] == cacheState) return;
+
+		if (!spriteCreated)
+		{
+			sprite.setColorDepth(16);
+			spriteCreated = sprite.createSprite(88, 17) != nullptr;
+		}
+		if (!spriteCreated) return;
+
+		sprite.fillSprite(TFT_BLACK);
+		sprite.setTextDatum(MC_DATUM);
+		sprite.setTextSize(1.0f);
+		for (int i = 0; i < 4; ++i)
+		{
+			const bool valid = isfinite(state.tyreTemperatures[i]) &&
+				state.tyreTemperatures[i] > 0.0f;
+			const uint16_t color = valid
+				? tyreTemperatureColor(state.tyreTemperatures[i])
+				: tft.color565(55, 59, 62);
+			const int x = i * 22;
+			sprite.setTextColor(valid ? TFT_LIGHTGREY : tft.color565(90, 94, 98),
+				TFT_BLACK);
+			sprite.drawString(valid
+				? String(lroundf(state.tyreTemperatures[i])) : "--",
+				x + 10, 6, 1);
+			sprite.fillRoundRect(x + 5, 12, 10, 2, 1, color);
+		}
+		sprite.setTextSize(1.0f);
+		sprite.pushSprite(226, 218);
+		prevData["radarTyres"] = cacheState;
+	}
+
+	void drawRadarStatusDot(int32_t x, int32_t y, bool active,
+		const String &id, uint16_t activeColor, uint16_t inactiveColor,
+		bool forceUpdate)
+	{
+		const String cacheState = active ? "1" : "0";
+		if (!forceUpdate && prevData[id] == cacheState) return;
+		tft.fillRect(x - 9, y - 7, 18, 14, TFT_BLACK);
+		if (active)
+		{
+			tft.fillCircle(x, y, 5, activeColor);
+			tft.drawCircle(x, y, 6, activeColor);
+		}
+		else
+		{
+			tft.drawCircle(x, y, 5, inactiveColor);
+		}
+		prevData[id] = cacheState;
 	}
 
 	void drawRadarRpm(const DashboardState &state, bool forceUpdate)
 	{
 		static constexpr int CENTER_X = 160;
 		static constexpr int CENTER_Y = 108;
-		static constexpr int INNER_RADIUS = 87;
-		static constexpr int OUTER_RADIUS = 101;
+		static constexpr int INNER_RADIUS = 70;
+		static constexpr int OUTER_RADIUS = 84;
 		static constexpr int SEGMENT_COUNT = 36;
 		static constexpr float START_DEGREES = 140.0f;
 		static constexpr float SWEEP_DEGREES = 260.0f;
@@ -1552,7 +1613,7 @@ public:
 		const uint8_t colors[][3] = {
 			{72, 205, 55}, {130, 225, 45}, {250, 224, 35},
 			{255, 126, 22}, {255, 24, 28}};
-		const uint16_t inactive = tft.color565(34, 38, 40);
+		const uint16_t inactive = tft.color565(48, 54, 58);
 
 		auto pointAt = [&](float degrees, int radius, int &px, int &py)
 		{
@@ -1595,12 +1656,12 @@ public:
 			const float centerAngle = START_DEGREES +
 				SWEEP_DEGREES * i / (SEGMENT_COUNT - 1);
 			const float halfAngle = SWEEP_DEGREES /
-				(SEGMENT_COUNT - 1) * 0.36f;
+				(SEGMENT_COUNT - 1) * 0.30f;
 			int x1, y1, x2, y2, x3, y3, x4, y4;
-			pointAt(centerAngle - halfAngle, INNER_RADIUS, x1, y1);
-			pointAt(centerAngle - halfAngle, OUTER_RADIUS, x2, y2);
-			pointAt(centerAngle + halfAngle, INNER_RADIUS, x3, y3);
-			pointAt(centerAngle + halfAngle, OUTER_RADIUS, x4, y4);
+			pointAt(centerAngle - halfAngle, 70, x1, y1);
+			pointAt(centerAngle - halfAngle, 84, x2, y2);
+			pointAt(centerAngle + halfAngle, 70, x3, y3);
+			pointAt(centerAngle + halfAngle, 84, x4, y4);
 			tft.fillTriangle(x1, y1, x2, y2, x3, y3, color);
 			tft.fillTriangle(x2, y2, x4, y4, x3, y3, color);
 		}
@@ -1615,7 +1676,6 @@ public:
 			pointAt(markerAngle, OUTER_RADIUS + 3, x2, y2);
 			tft.drawLine(x1, y1, x2, y2, tft.color565(255, 80, 42));
 		}
-
 		previousActive = active;
 		previousPulse = pulse;
 		previousMix = pulse ? whiteMix : 0;
@@ -1646,28 +1706,30 @@ public:
 			tft.setTextDatum(TL_DATUM);
 			tft.setTextSize(1.0f);
 
-			tft.drawRoundRect(2, 20, 69, 179, 4, frame);
-			tft.drawRoundRect(249, 20, 69, 179, 4, frame);
+			tft.fillCircle(160, 108, 88, TFT_BLACK);
+			tft.drawCircle(160, 108, 88, tft.color565(62, 65, 68));
+			tft.drawCircle(160, 108, 86, tft.color565(35, 38, 40));
+
+			tft.drawRoundRect(2, 20, 65, 179, 4, frame);
+			tft.drawRoundRect(253, 20, 65, 179, 4, frame);
 			for (int y : {64, 108, 152})
 			{
-				tft.drawFastHLine(3, y, 67, frame);
-				tft.drawFastHLine(250, y, 67, frame);
+				tft.drawFastHLine(3, y, 63, frame);
+				tft.drawFastHLine(254, y, 63, frame);
 			}
 			tft.drawRoundRect(2, 203, 316, 35, 4, frame);
-			tft.drawFastVLine(108, 204, 33, frame);
-			tft.drawFastVLine(211, 204, 33, frame);
+			tft.drawFastVLine(102, 204, 33, frame);
+			tft.drawFastVLine(222, 204, 33, frame);
 
-			tft.fillCircle(160, 108, 106, TFT_BLACK);
-			tft.drawCircle(160, 108, 105, tft.color565(62, 65, 68));
-			tft.drawCircle(160, 108, 103, tft.color565(35, 38, 40));
 			for (int i = 0; i <= 12; ++i)
 			{
 				const float angle = (140.0f + 260.0f * i / 12.0f) * DEG_TO_RAD;
-				const int inner = i % 3 == 0 ? 76 : 79;
+				const int inner = i % 3 == 0 ? 60 : 63;
 				const int x1 = 160 + lroundf(cosf(angle) * inner);
 				const int y1 = 108 + lroundf(sinf(angle) * inner);
-				const int x2 = 160 + lroundf(cosf(angle) * 84);
-				const int y2 = 108 + lroundf(sinf(angle) * 84);
+				const int tickOuter = 68;
+				const int x2 = 160 + lroundf(cosf(angle) * tickOuter);
+				const int y2 = 108 + lroundf(sinf(angle) * tickOuter);
 				tft.drawLine(x1, y1, x2, y2,
 					i % 3 == 0 ? TFT_WHITE : tft.color565(85, 88, 92));
 			}
@@ -1677,71 +1739,62 @@ public:
 			tft.drawString("POS", 8, 69, 1);
 			tft.drawString("BEST", 8, 113, 1);
 			tft.drawString("LAST", 8, 157, 1);
-			tft.drawString("FUEL", 267, 25, 1);
-			tft.drawString("REM", 267, 69, 1);
-			tft.drawString("CURRENT", 255, 113, 1);
-			tft.drawString("TYRES", 267, 157, 1);
-			tft.drawCentreString("GEAR", 160, 48, 1);
+			tft.drawString("FUEL", 260, 25, 1);
+			tft.drawString("REM", 260, 69, 1);
+			tft.drawString("CURRENT", 258, 113, 1);
+			tft.drawString("PEDALS", 258, 155, 1);
+			tft.drawCentreString("GEAR", 160, 53, 1);
 			tft.drawCentreString("km/h", 160, 163, 1);
-			tft.drawCentreString("RPM", 160, 184, 1);
-			tft.drawString("DELTA", 8, 208, 1);
-			tft.drawString("ABS", 116, 208, 1);
-			tft.drawString("TCS", 219, 208, 1);
+			tft.drawCentreString("RPM", 160, 178, 1);
+			tft.drawString("ABS", 8, 208, 1);
+			tft.drawString("TCS", 54, 208, 1);
+			tft.drawString("DELTA", 110, 208, 1);
+			tft.drawString("TYRE TEMP", 230, 208, 1);
 		}
 
 		drawRadarRpm(state, redraw);
-		drawRadarValue(7, 36, 59, 24, state.tyrePressureRearLeft,
+		drawRadarValue(7, 36, 56, 24, state.tyrePressureRearLeft,
 			"radarLap", TFT_WHITE, 2, ML_DATUM, redraw, 0.78f, 0.9f);
-		drawRadarValue(7, 80, 59, 24, state.tyrePressureFrontRight,
+		drawRadarValue(7, 80, 56, 24, state.tyrePressureFrontRight,
 			"radarPos", TFT_WHITE, 2, ML_DATUM, redraw, 0.9f, 0.95f);
-		drawRadarValue(7, 124, 59, 24, state.bestLapTime,
+		drawRadarValue(7, 124, 56, 24, state.bestLapTime,
 			"radarBest", TFT_WHITE, 1, ML_DATUM, redraw);
-		drawRadarValue(7, 168, 59, 24, state.lastLapTime,
+		drawRadarValue(7, 168, 56, 24, state.lastLapTime,
 			"radarLast", TFT_WHITE, 1, ML_DATUM, redraw);
-		drawRadarValue(254, 36, 59, 24, state.brakeBias,
+		drawRadarValue(257, 36, 57, 24, state.brakeBias,
 			"radarFuel", TFT_WHITE, 2, MR_DATUM, redraw, 0.85f, 0.95f);
-		drawRadarValue(254, 80, 59, 24, state.tyrePressureFrontLeft,
+		drawRadarValue(257, 80, 57, 24, state.tyrePressureFrontLeft,
 			"radarRem", TFT_WHITE, 2, MR_DATUM, redraw, 0.85f, 0.95f);
-		drawRadarValueBuffered(253, 124, 62, 22, state.currentLapTime,
+		drawRadarValueBuffered(257, 124, 57, 22, state.currentLapTime,
 			"radarCurrent", state.lapInvalidated == "True" ? red : TFT_WHITE,
 			1, MR_DATUM, redraw, currentSprite, currentSpriteCreated);
 
-		String tyres;
-		for (int i = 0; i < 4; ++i)
-		{
-			if (i > 0) tyres += " ";
-			tyres += isnan(state.tyreTemperatures[i])
-				? "--" : String(lroundf(state.tyreTemperatures[i]));
-		}
-		drawRadarValueBuffered(253, 140, 62, 15, tyres, "radarTyres",
-			TFT_WHITE, 1, MC_DATUM, redraw, tyreSprite, tyreSpriteCreated,
-			0.72f, 0.85f);
+		drawRadarTyres(state, redraw, tyreSprite, tyreSpriteCreated);
 		drawRadarPedals(state, redraw);
 
 		uint16_t deltaColor = TFT_WHITE;
 		if (state.sessionBestLiveDeltaSeconds.startsWith("-")) deltaColor = green;
 		else if (state.sessionBestLiveDeltaSeconds.startsWith("+") &&
 			state.sessionBestLiveDeltaSeconds != "+0.000") deltaColor = red;
-		drawRadarValue(7, 218, 96, 17, state.sessionBestLiveDeltaSeconds,
-			"radarDelta", deltaColor, 2, MR_DATUM, redraw, 0.82f, 0.92f);
-		drawRadarValue(116, 218, 87, 17,
-			isActiveValue(state.absActive) ? "ON" : "--", "radarAbs",
-			isActiveValue(state.absActive) ? yellow : muted,
-			2, MC_DATUM, redraw, 0.85f, 0.92f);
-		drawRadarValue(219, 218, 91, 17,
-			isActiveValue(state.tcActive) ? "ON" : "--", "radarTcs",
-			isActiveValue(state.tcActive) ? blue : muted,
-			2, MC_DATUM, redraw, 0.85f, 0.92f);
+		String deltaDisplay = state.sessionBestLiveDeltaSeconds;
+		if (deltaDisplay.startsWith("+") || deltaDisplay.startsWith("-"))
+			deltaDisplay = deltaDisplay.substring(0, 1) + " " + deltaDisplay.substring(1);
+		drawRadarValue(106, 218, 112, 17, deltaDisplay,
+			"radarDelta", deltaColor, 2, MC_DATUM, redraw);
+		drawRadarStatusDot(29, 226, isActiveValue(state.absActive), "radarAbs",
+			yellow, muted, redraw);
+		drawRadarStatusDot(75, 226, isActiveValue(state.tcActive), "radarTcs",
+			blue, muted, redraw);
 
-		drawRadarValue(116, 58, 88, 59, state.gear, "radarGear",
-			TFT_WHITE, 7, MC_DATUM, redraw, 0.95f, 1.0f);
-		drawRadarValueBuffered(100, 119, 120, 42, state.speed, "radarSpeed",
+		drawRadarValue(116, 63, 88, 56, state.gear, "radarGear",
+			TFT_WHITE, 7, MC_DATUM, redraw, 0.98f, 1.0f);
+		drawRadarValueBuffered(115, 121, 90, 39, state.speed, "radarSpeed",
 			TFT_WHITE, 7, MC_DATUM, redraw, speedSprite, speedSpriteCreated,
-			0.76f, 0.82f);
+			0.66f, 0.72f);
 		const int displayedRpm = ((state.engineRpm + 25) / 50) * 50;
-		drawRadarValue(127, 190, 66, 12, String(displayedRpm), "radarRpm",
+		drawRadarValue(127, 187, 66, 16, String(displayedRpm), "radarRpm",
 			state.revLimitAlertActive ? red : tft.color565(255, 118, 25),
-			1, MC_DATUM, redraw);
+			2, MC_DATUM, redraw);
 		prevData["radarLayoutState"] = layoutState;
 	}
 
