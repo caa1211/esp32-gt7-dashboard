@@ -80,6 +80,10 @@ One firmware includes four dashboard themes with the same live GT7 telemetry fea
 - **Retro** — a warm paper-colored instrument panel with dark text and restrained accents.
 - **Radar** — a circular tachometer-focused dark layout with side telemetry panels.
 
+<p align="center">
+  <img src="photos/theme_all.jpg" width="900" alt="Classic, GT3, Radar and Retro dashboard theme previews">
+</p>
+
 While the display is active, tap it once, choose **SELECT THEME**, then select a theme. The selection is saved by enum value and restored after reboot. Resetting Wi-Fi does not reset the selected theme or brightness.
 
 <p align="center">
