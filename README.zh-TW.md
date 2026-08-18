@@ -1,4 +1,4 @@
-# ESP32 GT7 Dashboard ([線上安裝](https://caa1211.github.io/esp32-gt7-dashboard/))
+# ESP32 GT7 Dashboard ([線上安裝](https://caa1211.github.io/esp32-gt7-dashboard/?lang=zh-TW))
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
@@ -102,7 +102,7 @@
 5. 等待安裝完成。
 6. 拔除 USB 並重新上電。
 
-👉 **https://caa1211.github.io/esp32-gt7-dashboard/**
+👉 **https://caa1211.github.io/esp32-gt7-dashboard/?lang=zh-TW**
 
 網頁安裝程式支援本專案所設定的傳統 ESP32 目標。韌體維護者可參閱
 [docs/RELEASING.md](docs/RELEASING.md)，了解本機編譯、二進位檔案放置、燒錄位址及發佈流程。
