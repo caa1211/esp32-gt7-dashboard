@@ -81,11 +81,11 @@
 - **Retro** — 暖色紙張底、深色文字與低調提示色的復古儀表板。
 - **Radar** — 以圓形轉速環為核心、兩側配置遙測資訊的深色儀表板。
 
-螢幕亮起時點一下，選擇 **SELECT THEME**，再選取需要的主題。主題會以固定 enum 值儲存並在重新開機後恢復；重設 Wi-Fi 不會清除主題或亮度設定。
-
 <p align="center">
-  <img src="photos/1.25and1.26_cht.png" width="900" alt="GT7 Dashboard 韌體 1.2.5 與 1.2.6 外觀比較">
+  <img src="photos/theme_all.jpg" width="900" alt="Classic、GT3、Radar 與 Retro 四種儀表主題預覽">
 </p>
+
+螢幕亮起時點一下，選擇 **SELECT THEME**，再選取需要的主題。主題會以固定 enum 值儲存並在重新開機後恢復；重設 Wi-Fi 不會清除主題或亮度設定。
 
 ---
 
