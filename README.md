@@ -1,5 +1,5 @@
 
-# ESP32 GT7 Dashboard ([Installer](https://caa1211.github.io/esp32-gt7-dashboard/))
+# ESP32 GT7 Dashboard ([Installer](https://caa1211.github.io/esp32-gt7-dashboard/?lang=en))
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
@@ -101,7 +101,7 @@ No development tools are required.
 5. Wait for the installation to complete.
 6. Disconnect the USB cable and power the device.
 
-👉 **https://caa1211.github.io/esp32-gt7-dashboard/**
+👉 **https://caa1211.github.io/esp32-gt7-dashboard/?lang=en**
 
 The browser installer supports the classic ESP32 target configured by this repository.
 Firmware maintainers can find the local build, binary staging, flash-offset, and publishing

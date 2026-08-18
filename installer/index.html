@@ -4,17 +4,22 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#07111f">
+    <link rel="icon" type="image/png" sizes="64x64" href="fav.png?v=3">
+    <link rel="shortcut icon" type="image/png" href="fav.png?v=3">
+    <link rel="apple-touch-icon" href="fav.png?v=3">
     <meta name="description" content="Install the ESP32 GT7 Dashboard firmware from a compatible browser.">
     <meta property="og:type" content="website">
     <meta property="og:title" content="ESP32 GT7 Dashboard Installer">
     <meta property="og:description" content="Install the ESP32 GT7 Dashboard with four switchable GT7 telemetry themes.">
     <meta property="og:url" content="https://caa1211.github.io/esp32-gt7-dashboard/">
-    <meta property="og:image" content="https://caa1211.github.io/esp32-gt7-dashboard/theme_all.jpg">
+    <meta property="og:image" content="https://caa1211.github.io/esp32-gt7-dashboard/og-image.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Classic, GT3, Radar and Retro ESP32 GT7 Dashboard themes">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="ESP32 GT7 Dashboard Installer">
     <meta name="twitter:description" content="Install the ESP32 GT7 Dashboard with four switchable GT7 telemetry themes.">
-    <meta name="twitter:image" content="https://caa1211.github.io/esp32-gt7-dashboard/theme_all.jpg">
+    <meta name="twitter:image" content="https://caa1211.github.io/esp32-gt7-dashboard/og-image.jpg">
     <title>ESP32 GT7 Dashboard Installer</title>
     <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
     <style>
@@ -92,7 +97,7 @@
 
       main {
         position: relative;
-        width: min(100%, 680px);
+        width: min(100%, 800px);
         padding: clamp(28px, 6vw, 52px);
         border: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 24px;
@@ -100,6 +105,23 @@
         box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
         backdrop-filter: blur(14px);
       }
+
+      .language-toggle {
+        position: absolute;
+        top: 18px;
+        right: 20px;
+        padding: 6px 11px;
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.08);
+        color: #cbd5e1;
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+
+      .language-toggle:hover { background: rgba(148, 163, 184, 0.16); }
 
       .eyebrow {
         margin: 0 0 10px;
@@ -127,6 +149,17 @@
       .release-version:hover { background: rgba(14, 165, 233, 0.18); }
 
       .version-chevron { font-size: 0.7rem; }
+
+      .version-icon {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+      }
 
       .version-actions {
         display: flex;
@@ -157,7 +190,10 @@
       .share-button {
         display: inline-flex;
         align-items: center;
-        padding: 6px 11px;
+        justify-content: center;
+        width: 52px;
+        min-height: 32px;
+        padding: 6px;
         border: 1px solid rgba(148, 163, 184, 0.32);
         border-radius: 999px;
         background: rgba(148, 163, 184, 0.08);
@@ -169,6 +205,20 @@
       }
 
       .share-button:hover { background: rgba(148, 163, 184, 0.16); }
+
+      .share-button.copied { color: #86efac; }
+      .share-button.failed { color: #fda4af; }
+
+      .share-icon {
+        width: 17px;
+        height: 17px;
+        transform: translateX(-2px);
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+      }
 
       .theme-preview {
         margin: 24px 0 0;
@@ -455,25 +505,40 @@
   </head>
   <body>
     <main>
-      <p class="eyebrow">USB Web Installer</p>
+      <button class="language-toggle" id="language-toggle" type="button">中文</button>
+      <p class="eyebrow" data-i18n="eyebrow">USB Web Installer</p>
       <div class="title-row">
         <div class="title-copy">
           <h1>ESP32 GT7 Dashboard</h1>
           <div class="version-actions">
-            <button class="share-button" id="share-button" type="button">Share</button>
             <button
               class="release-version"
               id="version-menu-button"
               type="button"
               aria-haspopup="dialog"
               aria-live="polite"
-            ><span id="release-version">Version loading…</span><span class="version-chevron" aria-hidden="true">▼</span></button>
+            >
+              <svg class="version-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 13 11 22l-9-9V4h9l9 9Z"></path>
+                <circle cx="7" cy="9" r="1.5"></circle>
+              </svg>
+              <span id="release-version">Version loading…</span>
+              <span class="version-chevron" aria-hidden="true">▼</span>
+            </button>
             <a
               class="kofi-button"
               href="https://ko-fi.com/caa1211"
               target="_blank"
               rel="noopener noreferrer"
             >☕ Support me on Ko-fi</a>
+            <button class="share-button" id="share-button" type="button" aria-label="Share installer" title="Share installer">
+              <svg class="share-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"></path>
+              </svg>
+            </button>
           </div>
         </div>
         <aside class="corner-profile" aria-label="Project creator">
@@ -486,12 +551,12 @@
           >facebook: caa1211</a>
         </aside>
       </div>
-      <p class="lead">
-        Flash the dashboard firmware directly from a compatible desktop browser.
-        No PlatformIO installation is required.
+      <p class="lead" data-i18n="lead">
+        Install the dashboard firmware directly from a compatible desktop browser.
+        No additional software or tools are required.
       </p>
 
-      <ol class="steps">
+      <ol class="steps" id="install-steps">
         <li>Connect the classic ESP32 board with a data-capable USB cable.</li>
         <li>Close serial monitors and other programs using its serial port.</li>
         <li>Select <strong>Install firmware</strong>, choose the port, and confirm.</li>
@@ -499,41 +564,41 @@
       </ol>
 
       <div class="firmware-choice">
-        <label for="display-controller">Display controller</label>
+        <label for="display-controller" id="controller-label">Display controller</label>
         <select id="display-controller">
           <option value="ili9341">ILI9341 (standard)</option>
           <option value="st7789">ST7789 (alternate)</option>
         </select>
-        <p>Select the controller fitted to your ESP32-2432S028.</p>
+        <p id="controller-help">Select the controller fitted to your ESP32-2432S028.</p>
       </div>
 
       <div class="install">
         <esp-web-install-button id="install-button" manifest="manifest.json">
-          <button class="connect-button" slot="activate">Connect &amp; install</button>
-          <button slot="unsupported">Use Chrome, Edge, or another Web Serial browser</button>
+          <button class="connect-button" id="connect-button" slot="activate">Connect &amp; install</button>
+          <button id="unsupported-button" slot="unsupported">Use Chrome, Edge, or another Web Serial browser</button>
         </esp-web-install-button>
       </div>
 
-      <p class="compatibility-warning">
+      <p class="compatibility-warning" id="compatibility-warning">
         ⚠️ ESP32-2432S028 only. Installing replaces the firmware currently on the device.
       </p>
 
       <figure class="theme-preview">
         <img src="theme_all.jpg" alt="Classic, GT3, Radar and Retro ESP32 GT7 Dashboard themes">
-        <figcaption>Four switchable themes. The same live GT7 telemetry in every layout.</figcaption>
+        <figcaption id="theme-caption">Four switchable themes. The same live GT7 telemetry in every layout.</figcaption>
       </figure>
 
-      <section class="quick-start" aria-labelledby="quick-start-title">
+      <section class="quick-start" id="quick-start" aria-labelledby="quick-start-title">
         <h2 id="quick-start-title">✅ Installation complete</h2>
         <p>Next steps:</p>
         <ol>
           <li>Disconnect USB.</li>
           <li>Reconnect power.</li>
-          <li>Connect to Wi-Fi:<br><span class="wifi-name">GT7-DASH-SETUP</span></li>
+          <li>Connect to Wi-Fi: <span class="wifi-name">GT7-DASH-SETUP</span></li>
         </ol>
       </section>
 
-      <section class="project-support" aria-labelledby="project-support-title">
+      <section class="project-support" id="project-support" aria-labelledby="project-support-title">
         <h2 id="project-support-title">❤️ Enjoying ESP32 GT7 Dashboard?</h2>
         <p>If this project helped you build your GT7 dashboard:</p>
         <a
@@ -546,7 +611,7 @@
         <p>Every star and share helps the project reach more people.</p>
       </section>
 
-      <footer>
+      <footer id="page-footer">
         Firmware source and release instructions are available in the
         <a href="https://github.com/caa1211/esp32-gt7-dashboard">GitHub repository</a>.
       </footer>
@@ -575,9 +640,136 @@
       const versionList = document.getElementById("version-list");
       const versionNotes = document.getElementById("version-notes");
       const shareButton = document.getElementById("share-button");
+      const languageToggle = document.getElementById("language-toggle");
       let releases = [];
       let selectedVersion = "";
       let previewVersion = "";
+      let currentLanguage = "en";
+
+      const translations = {
+        en: {
+          toggle: "中文",
+          eyebrow: "USB Web Installer",
+          lead: "Install the dashboard firmware directly from a compatible desktop browser. No additional software or tools are required.",
+          steps: [
+            "Connect the classic ESP32 board with a data-capable USB cable.",
+            "Close serial monitors and other programs using its serial port.",
+            "Select Install firmware, choose the port, and confirm.",
+            "Leave the board connected until the installation finishes."
+          ],
+          controller: "Display controller",
+          controllerHelp: "Select the controller fitted to your ESP32-2432S028.",
+          connect: "Connect & install",
+          unsupported: "Use Chrome, Edge, or another Web Serial browser",
+          warning: "⚠️ ESP32-2432S028 only. Installing replaces the firmware currently on the device.",
+          caption: "Four switchable themes. The same live GT7 telemetry in every layout.",
+          complete: "✅ Installation complete",
+          next: "Next steps:",
+          quickSteps: ["Disconnect USB.", "Reconnect power."],
+          wifi: "Connect to Wi-Fi:",
+          enjoying: "🏁 Enjoying ESP32 GT7 Dashboard?",
+          helped: "If this project helped you build your GT7 dashboard:",
+          star: "⭐ Star this repository",
+          shareProject: "📣 Share it with other GT7 and sim racing enthusiasts.",
+          impact: "Every star and share helps the project reach more people.",
+          footer: "Firmware source and release instructions are available in the",
+          repository: "GitHub repository",
+          selectVersion: "Select firmware version",
+          latest: "Latest",
+          useVersion: "Use Version",
+          unavailable: "Version unavailable",
+          share: "Share installer",
+          copied: "Link copied",
+          copyFailed: "Copy failed"
+        },
+        zh: {
+          toggle: "EN",
+          eyebrow: "USB 網頁安裝程式",
+          lead: "使用相容的桌面瀏覽器即可直接安裝 Dashboard 韌體，不需要另外安裝任何軟體或工具。",
+          steps: [
+            "使用可傳輸資料的 USB 線連接 ESP32 開發板。",
+            "關閉序列監控程式，以及其他正在使用該序列埠的程式。",
+            "點選安裝韌體、選擇正確的連接埠，然後確認安裝。",
+            "安裝完成前，請保持開發板連線。"
+          ],
+          controller: "顯示控制器",
+          controllerHelp: "請選擇你的 ESP32-2432S028 所使用的顯示控制器。",
+          connect: "連接並安裝",
+          unsupported: "請使用 Chrome、Edge 或其他支援 Web Serial 的瀏覽器",
+          warning: "⚠️ 僅適用於 ESP32-2432S028。安裝後會取代裝置目前的韌體。",
+          caption: "四種可切換主題，每種版面都顯示相同的即時 GT7 遙測資料。",
+          complete: "✅ 安裝完成",
+          next: "接下來：",
+          quickSteps: ["拔除 USB。", "重新接上電源。"],
+          wifi: "連接 Wi-Fi：",
+          enjoying: "🏁 喜歡 ESP32 GT7 Dashboard 嗎？",
+          helped: "如果這個專案幫助你完成 GT7 Dashboard：",
+          star: "⭐ 幫這個專案加星",
+          shareProject: "📣 分享給其他 GT7 與賽車模擬玩家。",
+          impact: "每一個星星與分享，都能讓更多人看見這個專案。",
+          footer: "韌體原始碼與發行說明可在此查看：",
+          repository: "GitHub 專案頁面",
+          selectVersion: "選擇韌體版本",
+          latest: "最新",
+          useVersion: "使用版本",
+          unavailable: "無法取得版本資訊",
+          share: "分享安裝程式",
+          copied: "連結已複製",
+          copyFailed: "複製失敗"
+        }
+      };
+
+      function setLanguage(language) {
+        currentLanguage = language;
+        const text = translations[language];
+        document.documentElement.lang = language === "zh" ? "zh-TW" : "en";
+        languageToggle.textContent = text.toggle;
+        document.querySelector(".eyebrow").textContent = text.eyebrow;
+        document.querySelector(".lead").textContent = text.lead;
+        document.querySelectorAll("#install-steps li").forEach((item, index) => item.textContent = text.steps[index]);
+        document.getElementById("controller-label").textContent = text.controller;
+        document.getElementById("controller-help").textContent = text.controllerHelp;
+        document.getElementById("connect-button").textContent = text.connect;
+        document.getElementById("unsupported-button").textContent = text.unsupported;
+        document.getElementById("compatibility-warning").textContent = text.warning;
+        document.getElementById("theme-caption").textContent = text.caption;
+
+        const quickStart = document.getElementById("quick-start");
+        quickStart.querySelector("h2").textContent = text.complete;
+        quickStart.querySelector("p").textContent = text.next;
+        const quickItems = quickStart.querySelectorAll("li");
+        quickItems[0].textContent = text.quickSteps[0];
+        quickItems[1].textContent = text.quickSteps[1];
+        quickItems[2].firstChild.textContent = `${text.wifi} `;
+
+        const support = document.getElementById("project-support");
+        support.querySelector("h2").textContent = text.enjoying;
+        const supportParagraphs = support.querySelectorAll("p");
+        supportParagraphs[0].textContent = text.helped;
+        support.querySelector(".star-link").textContent = text.star;
+        supportParagraphs[1].textContent = text.shareProject;
+        supportParagraphs[2].textContent = text.impact;
+
+        const footer = document.getElementById("page-footer");
+        footer.firstChild.textContent = `${text.footer} `;
+        footer.querySelector("a").textContent = text.repository;
+        versionDialog.querySelector("h2").textContent = text.selectVersion;
+        shareButton.title = text.share;
+        shareButton.setAttribute("aria-label", text.share);
+        selectManifest();
+        if (versionDialog.open) renderVersionDialog();
+      }
+
+      languageToggle.addEventListener("click", () => {
+        const nextLanguage = currentLanguage === "en" ? "zh" : "en";
+        const url = new URL(window.location.href);
+        url.searchParams.set("lang", nextLanguage === "zh" ? "zh-TW" : "en");
+        window.history.replaceState({}, "", url);
+        setLanguage(nextLanguage);
+      });
+
+      const requestedLanguage = new URLSearchParams(window.location.search).get("lang")?.toLowerCase();
+      setLanguage(requestedLanguage === "zh" || requestedLanguage === "zh-tw" ? "zh" : "en");
 
       shareButton.addEventListener("click", async () => {
         const shareData = {
@@ -592,12 +784,20 @@
             return;
           }
           await navigator.clipboard.writeText(shareData.url);
-          shareButton.textContent = "Link copied";
-          window.setTimeout(() => { shareButton.textContent = "Share"; }, 1800);
+          shareButton.classList.add("copied");
+          shareButton.title = translations[currentLanguage].copied;
+          window.setTimeout(() => {
+            shareButton.classList.remove("copied");
+            shareButton.title = translations[currentLanguage].share;
+          }, 1800);
         } catch (error) {
           if (error?.name === "AbortError") return;
-          shareButton.textContent = "Copy failed";
-          window.setTimeout(() => { shareButton.textContent = "Share"; }, 1800);
+          shareButton.classList.add("failed");
+          shareButton.title = translations[currentLanguage].copyFailed;
+          window.setTimeout(() => {
+            shareButton.classList.remove("failed");
+            shareButton.title = translations[currentLanguage].share;
+          }, 1800);
         }
       });
 
@@ -611,7 +811,7 @@
 
         const manifestPath = release.manifests[controllerSelect.value];
         installButton.setAttribute("manifest", manifestPath);
-        versionLabel.textContent = `Version ${release.version}`;
+        versionLabel.textContent = `${currentLanguage === "zh" ? "版本" : "Version"} ${release.version}`;
 
       }
 
@@ -627,9 +827,9 @@
           option.dataset.version = item.version;
           option.setAttribute("aria-current", String(item.version === previewVersion));
           const label = document.createElement("span");
-          label.textContent = `Version ${item.version}`;
+          label.textContent = `${currentLanguage === "zh" ? "版本" : "Version"} ${item.version}`;
           const status = document.createElement("small");
-          status.textContent = index === 0 ? "Latest" : "";
+          status.textContent = index === 0 ? translations[currentLanguage].latest : "";
           option.append(label, status);
           option.addEventListener("click", () => {
             previewVersion = item.version;
@@ -645,7 +845,7 @@
           versionNotes.append(item);
         }
 
-        versionDialogConfirm.textContent = `Use Version ${release.version}`;
+        versionDialogConfirm.textContent = `${translations[currentLanguage].useVersion} ${release.version}`;
       }
 
       controllerSelect.addEventListener("change", () => {
@@ -677,7 +877,7 @@
           selectManifest();
         })
         .catch(() => {
-          versionLabel.textContent = "Version unavailable";
+          versionLabel.textContent = translations[currentLanguage].unavailable;
           versionMenuButton.disabled = true;
         });
     </script>
