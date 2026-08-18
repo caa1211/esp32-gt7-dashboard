@@ -19,6 +19,7 @@ The included themes are:
 | `Classic` | 0 | `drawPage1Legacy()` | Original five-column engineering UI |
 | `GT3` | 1 | `drawPage1()` | Default dark motorsport UI |
 | `Retro` | 2 | `drawRetroDashboard()` | Warm paper-and-ink instrument UI |
+| `Radar` | 3 | `drawRadarDashboard()` | Circular tachometer-focused dark UI |
 
 Persisted values are part of the device settings format. Never reorder or reuse an existing enum value.
 
@@ -50,7 +51,7 @@ If a new telemetry field is genuinely required by every theme, add it to the sha
 7. Document the theme in both root README files.
 8. Build and test both `esp32` (ILI9341) and `esp32-st7789` targets.
 
-The current 320 x 240 Settings screen intentionally fits three large theme buttons plus Back. Three is not a firmware limit, but it is the recommended usability limit for the current menu. A fourth theme should introduce pagination or Previous/Next controls instead of smaller touch targets.
+The current 320 x 240 Theme Selection screen uses a 2 x 2 grid for four large theme buttons plus Back. Four is not a firmware limit, but it is the recommended usability limit for this menu. A fifth theme should introduce pagination or Previous/Next controls instead of shrinking the touch targets.
 
 ## Renderer rules
 

@@ -2,6 +2,21 @@
 
 See also: [Theme Development Guide](THEME_DEVELOPMENT.md).
 
+## Radar Theme Extension
+
+The post-1.3.0 Radar extension adds a fourth presentation-only renderer while preserving the existing shared telemetry, persistence, touch, brightness, Wi-Fi and sleep layers.
+
+- [x] Append stable enum value `Radar = 3` without changing existing saved values.
+- [x] Add a 2 x 2 Theme Selection grid with full-size touch targets and a consistent Back button.
+- [x] Add a circular, segmented RPM renderer with vehicle-relative fill, alert marker and non-blocking shift pulse.
+- [x] Present the same supported lap, position, timing, fuel, tyre, pedal, delta, ABS, TCS, gear and speed data.
+- [x] Build both ILI9341 and ST7789 targets within existing memory limits.
+- [x] Flash the ST7789 development build to COM3 for physical review.
+- [x] Complete live-GT7 typography and flicker acceptance on the physical ST7789 display.
+- [ ] Choose a release number and publish installer binaries after acceptance.
+
+**Acceptance record:** The Radar renderer was iterated on the physical ST7789 board with live telemetry. Final fixes separate dynamic sprite bounds from the RPM arc, retain stable RPM segment geometry and endpoint ticks, use buffered high-frequency fields, and provide readable timing, pedal, tyre-temperature, ABS/TCS, RPM, speed and gear presentation. Both display targets build successfully; extended-session acceptance can continue as ordinary regression testing before packaging a release.
+
 ## Project Status
 
 This is a major UI architecture renovation. Work proceeds one phase at a time, and every phase must pass its physical-device acceptance gate before the next phase begins.
