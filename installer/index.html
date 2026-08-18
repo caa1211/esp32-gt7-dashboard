@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#07111f">
     <meta name="description" content="Install the ESP32 GT7 Dashboard firmware from a compatible browser.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="ESP32 GT7 Dashboard Installer">
+    <meta property="og:description" content="Install the ESP32 GT7 Dashboard with four switchable GT7 telemetry themes.">
+    <meta property="og:url" content="https://caa1211.github.io/esp32-gt7-dashboard/">
+    <meta property="og:image" content="https://caa1211.github.io/esp32-gt7-dashboard/theme_all.jpg">
+    <meta property="og:image:alt" content="Classic, GT3, Radar and Retro ESP32 GT7 Dashboard themes">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="ESP32 GT7 Dashboard Installer">
+    <meta name="twitter:description" content="Install the ESP32 GT7 Dashboard with four switchable GT7 telemetry themes.">
+    <meta name="twitter:image" content="https://caa1211.github.io/esp32-gt7-dashboard/theme_all.jpg">
     <title>ESP32 GT7 Dashboard Installer</title>
     <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
     <style>
@@ -142,6 +152,45 @@
       .kofi-button:hover {
         background: rgba(244, 63, 94, 0.24);
         color: #fff1f2;
+      }
+
+      .share-button {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 11px;
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.08);
+        color: #cbd5e1;
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: 700;
+      }
+
+      .share-button:hover { background: rgba(148, 163, 184, 0.16); }
+
+      .theme-preview {
+        margin: 24px 0 0;
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 16px;
+        background: #000;
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+      }
+
+      .theme-preview img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .theme-preview figcaption {
+        padding: 10px 14px;
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
+        color: #94a3b8;
+        font-size: 0.8rem;
+        text-align: center;
       }
 
       h1 {
@@ -411,6 +460,7 @@
         <div class="title-copy">
           <h1>ESP32 GT7 Dashboard</h1>
           <div class="version-actions">
+            <button class="share-button" id="share-button" type="button">Share</button>
             <button
               class="release-version"
               id="version-menu-button"
@@ -468,6 +518,11 @@
         ⚠️ ESP32-2432S028 only. Installing replaces the firmware currently on the device.
       </p>
 
+      <figure class="theme-preview">
+        <img src="theme_all.jpg" alt="Classic, GT3, Radar and Retro ESP32 GT7 Dashboard themes">
+        <figcaption>Four switchable themes. The same live GT7 telemetry in every layout.</figcaption>
+      </figure>
+
       <section class="quick-start" aria-labelledby="quick-start-title">
         <h2 id="quick-start-title">✅ Installation complete</h2>
         <p>Next steps:</p>
@@ -519,9 +574,32 @@
       const versionDialogConfirm = document.getElementById("version-dialog-confirm");
       const versionList = document.getElementById("version-list");
       const versionNotes = document.getElementById("version-notes");
+      const shareButton = document.getElementById("share-button");
       let releases = [];
       let selectedVersion = "";
       let previewVersion = "";
+
+      shareButton.addEventListener("click", async () => {
+        const shareData = {
+          title: "ESP32 GT7 Dashboard Installer",
+          text: "Install the ESP32 GT7 Dashboard with four switchable telemetry themes.",
+          url: window.location.href,
+        };
+
+        try {
+          if (navigator.share) {
+            await navigator.share(shareData);
+            return;
+          }
+          await navigator.clipboard.writeText(shareData.url);
+          shareButton.textContent = "Link copied";
+          window.setTimeout(() => { shareButton.textContent = "Share"; }, 1800);
+        } catch (error) {
+          if (error?.name === "AbortError") return;
+          shareButton.textContent = "Copy failed";
+          window.setTimeout(() => { shareButton.textContent = "Share"; }, 1800);
+        }
+      });
 
       function selectedRelease() {
         return releases.find((release) => release.version === selectedVersion);
