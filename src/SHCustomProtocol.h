@@ -399,6 +399,7 @@ private:
 	int32_t lastGT7PacketId = -1;
 	bool hasReceivedGT7Packet = false;
 	bool gt7CarOnTrack = false;
+	uint8_t lastTelemetryDiagnosticMask = 0xFF;
 
 	// GT7 衍生數據：ABS 與剩餘油量圈數。
 	GT7DerivedMetrics derivedMetrics;
@@ -1868,7 +1869,7 @@ public:
 			barY,
 			barWidth,
 			barHeight,
-			tft.color565(28, 28, 28));
+			tft.color565(40, 40, 40));
 
 		tft.drawCentreString(
 			"Tap for settings",
@@ -1897,7 +1898,7 @@ public:
 			barY,
 			barWidth,
 			barHeight,
-			tft.color565(28, 28, 28));
+			tft.color565(40, 40, 40));
 
 		const int highlightWidth = 32;
 
@@ -1960,6 +1961,36 @@ public:
 			}
 		}
 	}
+
+	void drawTelemetryDiagnostics(bool force = false)
+	{
+		const bool wifiConnected = WiFi.status() == WL_CONNECTED;
+		const bool packetRecent =
+			lastGT7PacketTime != 0 && millis() - lastGT7PacketTime < RESET_WAITING_TIME * 1000;
+		const uint8_t mask =
+			(wifiConnected ? 1U : 0U) |
+			(packetRecent ? 2U : 0U) |
+			(gt7CarOnTrack ? 4U : 0U);
+
+		if (!force && mask == lastTelemetryDiagnosticMask) return;
+		lastTelemetryDiagnosticMask = mask;
+
+		static constexpr int y = 176;
+		static constexpr int spacing = 9;
+		const int startX = X_CENTER - spacing;
+		// Left to right: Wi-Fi connected, recent packet received, car on track.
+		const bool states[3] = {wifiConnected, packetRecent, gt7CarOnTrack};
+
+		tft.fillRect(startX - 4, y - 4, spacing * 2 + 8, 8, TFT_BLACK);
+		for (int index = 0; index < 3; ++index)
+		{
+			const int centerX = startX + index * spacing;
+			const uint16_t color = states[index]
+				? tft.color565(190, 190, 190)
+				: tft.color565(65, 65, 65);
+			tft.fillCircle(centerX, y, 2, color);
+		}
+	}
 	void updateConnectingScreen()
 	{
 		if (!connectingScreenActive)
@@ -1970,6 +2001,8 @@ public:
 			connectingAnimationStep = 0;
 			lastConnectingAnimationTime = 0;
 			connectingScreenActive = true;
+			lastTelemetryDiagnosticMask = 0xFF;
+			drawTelemetryDiagnostics(true);
 		}
 
 		const unsigned long now = millis();
@@ -1993,6 +2026,8 @@ public:
 
 			drawConnectingBar();
 		}
+
+		drawTelemetryDiagnostics();
 	}
 
 	bool isActiveValue(String value)
@@ -3479,16 +3514,24 @@ public:
 								 uint16_t color)
 		{
 			const String state = String(percent) + ":" + String(appliedPercent);
+			const int pedalIndex = color == TFT_YELLOW ? 0 : 1;
+			static uint32_t lastPedalFrameTime[2] = {0, 0};
 			const bool firstDraw = true;
 			const int oldPercent = 0;
 			const uint16_t inputColor = color == TFT_YELLOW
-				? tft.color565(255, 245, 150)
-				: tft.color565(110, 170, 255);
+				? tft.color565(255, 220, 120)
+				: tft.color565(120, 180, 255);
 
 			if (!forceUpdate && prevData[id] == state)
 			{
 				return;
 			}
+			const uint32_t now = millis();
+			if (!forceUpdate && now - lastPedalFrameTime[pedalIndex] < 33UL)
+			{
+				return;
+			}
+			lastPedalFrameTime[pedalIndex] = now;
 
 			const int32_t spriteInset = 2;
 			const int32_t spriteFillWidth = totalWidth - spriteInset * 2;
@@ -3934,8 +3977,7 @@ public:
 				const int buttonX = button % 2 == 0 ? 20 : 165;
 				const int buttonY = button < 2 ? 50 : 112;
 				drawSettingsButton(buttonX, buttonY, 135, 50,
-					dashboardThemeName(themes[button]),
-					pressed, active);
+					dashboardThemeName(themes[button]), pressed, active);
 			}
 			else if (button == 4)
 			{
@@ -4184,6 +4226,41 @@ public:
 			return;
 		}
 
+		// Waking always takes precedence over Settings touch targets.
+		// The first tap only restores the display; it never activates a hidden UI.
+		if (screenSleeping)
+		{
+			if (!isTouched && wasTouched)
+			{
+				screenSleeping = false;
+				screenOffByUser = false;
+				fadeScreenOn();
+				forceUpdate = true;
+				if (!previousGameRunning)
+				{
+					gameStoppedTimerStarted = true;
+					gameStoppedTime = millis();
+				}
+				else
+				{
+					gameStoppedTimerStarted = false;
+				}
+
+				if (settingsScreen != SettingsScreen::Closed)
+					drawSettingsScreen();
+			}
+			wasTouched = isTouched;
+			return;
+		}
+
+		// Treat every new touch as screen activity. This timer remains independent
+		// from the shorter Settings cancellation timer.
+		if (isTouched && !wasTouched && !previousGameRunning)
+		{
+			gameStoppedTimerStarted = true;
+			gameStoppedTime = millis();
+		}
+
 		if (settingsScreen != SettingsScreen::Closed)
 		{
 			if (!isTouched && settingsLastInteractionTime != 0 &&
@@ -4218,27 +4295,8 @@ public:
 
 		if (!isTouched && wasTouched)
 		{
-			if (screenSleeping)
-			{
-				screenSleeping = false;
-				screenOffByUser = false;
-				fadeScreenOn();
-				forceUpdate = true;
-				if (!previousGameRunning)
-				{
-					gameStoppedTimerStarted = true;
-					gameStoppedTime = millis();
-				}
-				else
-				{
-					gameStoppedTimerStarted = false;
-				}
-			}
-			else
-			{
-				showSettingsScreen(SettingsScreen::Main);
-				waitForReleaseAfterScreenChange = true;
-			}
+			showSettingsScreen(SettingsScreen::Main);
+			waitForReleaseAfterScreenChange = true;
 		}
 
 		wasTouched = isTouched;
