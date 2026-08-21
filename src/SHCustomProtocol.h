@@ -297,6 +297,20 @@ private:
 	int settingsPressedButton = -1;
 	bool wifiResetConfirmOpen = false;
 	bool wifiResetRequested = false;
+#if INCLUDE_GT7_WIFI
+	enum class TelemetryReconnectState : uint8_t
+	{
+		Idle,
+		WaitingBeforeReconnect,
+		WaitingForWifi,
+	};
+	TelemetryReconnectState telemetryReconnectState = TelemetryReconnectState::Idle;
+	unsigned long telemetryReconnectStateTime = 0;
+	static constexpr int RECONNECT_BUTTON_X = 112;
+	static constexpr int RECONNECT_BUTTON_Y = 187;
+	static constexpr int RECONNECT_BUTTON_W = 96;
+	static constexpr int RECONNECT_BUTTON_H = 20;
+#endif
 
 	// 記錄上一筆 GT7 執行狀態，用來偵測 False -> True
 	bool previousGameRunning = false;
@@ -960,6 +974,47 @@ public:
 
 #endif
 
+#if INCLUDE_GT7_WIFI
+	void startTelemetryReconnect()
+	{
+		if (telemetryReconnectState != TelemetryReconnectState::Idle) return;
+		WiFi.disconnect(false, false);
+		telemetryReconnectState = TelemetryReconnectState::WaitingBeforeReconnect;
+		telemetryReconnectStateTime = millis();
+		if (connectingScreenActive) drawTelemetryReconnectButton();
+	}
+
+	void updateTelemetryReconnect()
+	{
+		static constexpr unsigned long WIFI_RECONNECT_SETTLE_MS = 250UL;
+		static constexpr unsigned long WIFI_RECONNECT_TIMEOUT_MS = 15000UL;
+		const unsigned long now = millis();
+
+		if (telemetryReconnectState == TelemetryReconnectState::WaitingBeforeReconnect &&
+			now - telemetryReconnectStateTime >= WIFI_RECONNECT_SETTLE_MS)
+		{
+			WiFi.reconnect();
+			telemetryReconnectState = TelemetryReconnectState::WaitingForWifi;
+			telemetryReconnectStateTime = now;
+		}
+		else if (telemetryReconnectState == TelemetryReconnectState::WaitingForWifi)
+		{
+			if (WiFi.status() == WL_CONNECTED)
+			{
+				gt7Telem.restart();
+				gt7Telem.sendHeartbeat();
+				telemetryReconnectState = TelemetryReconnectState::Idle;
+				if (connectingScreenActive) drawTelemetryReconnectButton();
+			}
+			else if (now - telemetryReconnectStateTime >= WIFI_RECONNECT_TIMEOUT_MS)
+			{
+				telemetryReconnectState = TelemetryReconnectState::Idle;
+				if (connectingScreenActive) drawTelemetryReconnectButton();
+			}
+		}
+	}
+#endif
+
 	void loop()
 	{
 #if INCLUDE_GT7_WIFI
@@ -973,6 +1028,7 @@ public:
 		}
 
 		readGT7Wifi();
+		updateTelemetryReconnect();
 		updateGT7GameState();
 #endif
 
@@ -1835,6 +1891,27 @@ public:
 		prevData[cacheKey] = liveState;
 	}
 
+	void drawTelemetryReconnectButton(bool pressed = false)
+	{
+		const bool reconnecting =
+			telemetryReconnectState != TelemetryReconnectState::Idle;
+		const uint16_t border = tft.color565(
+			pressed ? 125 : 68, pressed ? 125 : 68, pressed ? 125 : 68);
+		const uint16_t text = tft.color565(
+			reconnecting ? 155 : 105,
+			reconnecting ? 155 : 105,
+			reconnecting ? 155 : 105);
+
+		tft.fillRect(RECONNECT_BUTTON_X, RECONNECT_BUTTON_Y,
+			RECONNECT_BUTTON_W, RECONNECT_BUTTON_H, TFT_BLACK);
+		tft.drawRoundRect(RECONNECT_BUTTON_X, RECONNECT_BUTTON_Y,
+			RECONNECT_BUTTON_W, RECONNECT_BUTTON_H, 4, border);
+		tft.setTextDatum(MC_DATUM);
+		tft.setTextColor(text, TFT_BLACK);
+		tft.drawCentreString(reconnecting ? "RECONNECTING" : "RECONNECT",
+			X_CENTER, RECONNECT_BUTTON_Y + RECONNECT_BUTTON_H / 2, 1);
+	}
+
 	void drawConnectingScreenBase()
 	{
 		tft.fillScreen(TFT_BLACK);
@@ -1882,6 +1959,8 @@ public:
 			SCREEN_WIDTH / 2,
 			SCREEN_HEIGHT - 12,
 			1);
+
+		drawTelemetryReconnectButton();
 	}
 
 	void drawConnectingBar()
@@ -4204,6 +4283,14 @@ public:
 		}
 	}
 
+	bool reconnectButtonAtTouch() const
+	{
+		return touchX >= RECONNECT_BUTTON_X &&
+			touchX < RECONNECT_BUTTON_X + RECONNECT_BUTTON_W &&
+			touchY >= RECONNECT_BUTTON_Y &&
+			touchY < RECONNECT_BUTTON_Y + RECONNECT_BUTTON_H;
+	}
+
 	void readTouch()
 	{
 		saveBrightnessIfDue();
@@ -4214,6 +4301,7 @@ public:
 
 		static bool wasTouched = false;
 		static bool waitForReleaseAfterScreenChange = false;
+		static bool reconnectButtonPressed = false;
 		const bool isTouched = tft.getTouch(&touchX, &touchY);
 
 		if (waitForReleaseAfterScreenChange)
@@ -4259,6 +4347,8 @@ public:
 		{
 			gameStoppedTimerStarted = true;
 			gameStoppedTime = millis();
+			reconnectButtonPressed = connectingScreenActive && reconnectButtonAtTouch();
+			if (reconnectButtonPressed) drawTelemetryReconnectButton(true);
 		}
 
 		if (settingsScreen != SettingsScreen::Closed)
@@ -4295,8 +4385,18 @@ public:
 
 		if (!isTouched && wasTouched)
 		{
-			showSettingsScreen(SettingsScreen::Main);
-			waitForReleaseAfterScreenChange = true;
+			const bool reconnectReleased = connectingScreenActive && reconnectButtonAtTouch();
+			if (reconnectButtonPressed && reconnectReleased)
+			{
+				startTelemetryReconnect();
+			}
+			else
+			{
+				if (reconnectButtonPressed) drawTelemetryReconnectButton();
+				showSettingsScreen(SettingsScreen::Main);
+				waitForReleaseAfterScreenChange = true;
+			}
+			reconnectButtonPressed = false;
 		}
 
 		wasTouched = isTouched;
