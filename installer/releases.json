@@ -14,31 +14,6 @@
       }
     },
     {
-      "version": "1.4.1",
-      "notes": [
-        "Fixed touch wake-up when the display sleeps while Settings is open.",
-        "Bundled the customized GT7 UDP parser directly with the project for reliable clean builds.",
-        "Reduced telemetry heap fragmentation by replacing per-packet dynamic buffers and removing packet dump logging."
-      ],
-      "manifests": {
-        "ili9341": "versions/1.4.1/manifest-ili9341.json",
-        "st7789": "versions/1.4.1/manifest-st7789.json"
-      }
-    },
-    {
-      "version": "1.4.0",
-      "notes": [
-        "Added the Radar dashboard theme with a circular telemetry-driven shift-light display.",
-        "Expanded Theme Selection to a four-theme 2 x 2 layout while preserving saved enum values.",
-        "Refined Radar timing, pedal, tyre-temperature, ABS/TCS, RPM, speed and gear presentation for the 320 x 240 display.",
-        "Separated high-frequency redraw regions to prevent flicker and RPM arc overlap."
-      ],
-      "manifests": {
-        "ili9341": "versions/1.4.0/manifest-ili9341.json",
-        "st7789": "versions/1.4.0/manifest-st7789.json"
-      }
-    },
-    {
       "version": "1.3.0",
       "notes": [
         "Added switchable GT3, Classic, and Retro dashboard themes with persistent on-device selection; GT3 remains the default.",
