@@ -46,12 +46,17 @@ If a new telemetry field is genuinely required by every theme, add it to the sha
 2. Extend `isValidDashboardTheme()` and `dashboardThemeName()`.
 3. Add a renderer branch in `renderDashboard()`.
 4. Implement a renderer that accepts `const DashboardState &` and `forceUpdate`.
-5. Add the theme to both theme arrays used by the Settings drawing and activation code.
-6. Redesign Theme Selection if the buttons no longer fit comfortably.
+5. Append the theme to the centralized `DASHBOARD_THEMES` catalog. Theme Selection uses
+   this catalog for looping navigation and indicators, so it must not maintain a separate
+   theme count or list.
+6. Verify the real renderer with the selector's fixed mock telemetry. Do not add preview
+   bitmap assets or write mock values into the live/global telemetry state.
 7. Document the theme in both root README files.
 8. Build and test both `esp32` (ILI9341) and `esp32-st7789` targets.
 
-The current 320 x 240 Theme Selection screen uses a 2 x 2 grid for four large theme buttons plus Back. Four is not a firmware limit, but it is the recommended usability limit for this menu. A fifth theme should introduce pagination or Previous/Next controls instead of shrinking the touch targets.
+The 320 x 240 Theme Selection screen previews one real renderer at a time and cycles through
+the centralized catalog. Adding a theme should therefore not require shrinking touch targets
+or redesigning the selector.
 
 ## Renderer rules
 
@@ -77,6 +82,56 @@ Use one of these approaches:
 Do not allocate a full-screen 16-bit sprite on these boards. Prefer small persistent sprites for high-frequency fields such as speed, current time, pedals and tyre temperatures. If sprite allocation can fail, retain a direct-draw fallback where practical.
 
 Fractionally scaling small bitmap fonts can create malformed or illegible glyphs on the 2.8-inch display. Prefer a native font size for small labels and timing values, then adjust the containing rectangle rather than squeezing the font.
+
+## High-frequency UI fields
+
+Treat every field according to how often it changes. Static frames and labels may be drawn
+only during a full redraw. Discrete values such as gear, lap and position should redraw only
+when their displayed value changes. Continuous values such as speed, RPM, current time,
+pedals and tyre temperatures may change on nearly every telemetry packet and need an explicit
+partial-redraw strategy.
+
+For every high-frequency field:
+
+1. Define one fixed rectangular ownership area that contains every pixel the field can draw.
+   Include the widest expected value, sign, decimal point, anti-aliased edge and any pulse or
+   color state. That area must not overlap borders, labels or another dynamic field.
+2. Build a cache key from every input that can alter the pixels, not only the numeric value.
+   Include formatted text, color, active state, fill width or animation frame as applicable.
+3. If the cache key is unchanged and `forceUpdate` is false, do no drawing and no clearing.
+4. When it changes, compose the complete ownership area off-screen in a small persistent
+   `LGFX_Sprite`: clear it to the theme background, draw all layers in their final order, then
+   transfer it with one `pushSprite()` call.
+5. Update the cache only after the final drawing operation succeeds. A failed sprite creation
+   must not make later frames look successfully rendered.
+
+Pedal bars and other layered indicators must redraw their background, commanded/input layer,
+filtered/applied layer and border together in the same sprite. Updating those layers in
+separate screen transactions commonly creates a visible flash or a temporary one-layer state.
+
+Segmented RPM displays usually do not need a sprite for the entire arc. Cache the active
+segment count and relevant color/pulse state, then redraw only segments whose final appearance
+changed. A segment must always be drawn with the same geometry whether active or inactive;
+do not let clearing rectangles, adjacent panels or endpoint decoration cover part of it.
+Animated shift warnings should be frame-limited with `millis()` and must not force unrelated
+dashboard fields to redraw.
+
+Avoid these patterns in a live renderer:
+
+- clearing a screen rectangle and returning before its replacement is drawn;
+- clearing an area larger than the field owns;
+- drawing a border before a later dynamic clear that overlaps it;
+- comparing raw floating-point telemetry when the displayed value is rounded;
+- allocating and deleting a sprite on every frame;
+- using a full-screen sprite to solve a small-field flicker problem;
+- calling `fillScreen()` or forcing a full layout redraw for ordinary telemetry changes;
+- storing preview/mock telemetry in the canonical runtime state.
+
+When a field still flickers, first test it with a constant displayed value. If it flickers while
+the cache key is constant, another drawing region is overlapping it. If it flickers only when
+the value changes, its clear-and-redraw path is visible or its sprite bounds/background are
+incorrect. Inspect ownership rectangles and render order before adding delays or increasing
+the global refresh rate.
 
 ## Shift-light behavior
 

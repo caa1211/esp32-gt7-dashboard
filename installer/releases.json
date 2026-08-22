@@ -1,6 +1,20 @@
 {
   "versions": [
     {
+      "version": "1.5.0",
+      "notes": [
+        "Redesigned Theme Selection with live renderer previews and fixed mock telemetry data.",
+        "Added looping theme navigation, compact applied/preview indicators, and persistent Apply or non-destructive Cancel actions.",
+        "Added a full-screen theme preview with a clear tap-to-return control.",
+        "Centralized the theme catalog and decoupled Classic and GT3 renderers from live telemetry for easier future theme expansion.",
+        "Kept heartbeat, UDP telemetry, discovery, Wi-Fi and sleep handling independent from theme preview rendering."
+      ],
+      "manifests": {
+        "ili9341": "versions/1.5.0/manifest-ili9341.json",
+        "st7789": "versions/1.5.0/manifest-st7789.json"
+      }
+    },
+    {
       "version": "1.4.2",
       "notes": [
         "Improved Radar theme readability with larger lap, position, fuel, remaining-lap and delta values.",
