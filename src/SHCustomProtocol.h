@@ -134,6 +134,21 @@ enum class DashboardTheme : uint8_t
 	Radar = 3,
 };
 
+struct DashboardThemeDescriptor
+{
+	DashboardTheme id;
+	const char *name;
+};
+
+static constexpr DashboardThemeDescriptor DASHBOARD_THEMES[] = {
+	{DashboardTheme::Classic, "CLASSIC"},
+	{DashboardTheme::GT3, "GT3"},
+	{DashboardTheme::Retro, "RETRO"},
+	{DashboardTheme::Radar, "RADAR"},
+};
+static constexpr size_t DASHBOARD_THEME_COUNT =
+	sizeof(DASHBOARD_THEMES) / sizeof(DASHBOARD_THEMES[0]);
+
 // Phase 1 renderer preview hook. Normal firmware loads the persisted theme;
 // development builds can set 0 through 3 without modifying source or storage.
 #ifndef GT7_DASHBOARD_THEME_PREVIEW
@@ -250,6 +265,9 @@ private:
 	Preferences dashboardPreferences;
 	DashboardTheme activeDashboardTheme = DashboardTheme::GT3;
 	DashboardTheme renderedDashboardTheme = DashboardTheme::GT3;
+	DashboardTheme previewDashboardTheme = DashboardTheme::GT3;
+	DashboardState themePreviewData;
+	bool previewFullscreen = false;
 	bool dashboardPreferencesReady = false;
 
 	uint16_t touchX, touchY; // definisce i due interi per gestione touchscreen
@@ -306,23 +324,58 @@ private:
 
 	static bool isValidDashboardTheme(uint8_t value)
 	{
-		return value <= static_cast<uint8_t>(DashboardTheme::Radar);
+		for (size_t i = 0; i < DASHBOARD_THEME_COUNT; ++i)
+			if (static_cast<uint8_t>(DASHBOARD_THEMES[i].id) == value) return true;
+		return false;
 	}
 
 	static const char *dashboardThemeName(DashboardTheme theme)
 	{
-		switch (theme)
-		{
-		case DashboardTheme::Classic:
-			return "CLASSIC";
-		case DashboardTheme::Retro:
-			return "RETRO";
-		case DashboardTheme::Radar:
-			return "RADAR";
-		case DashboardTheme::GT3:
-		default:
-			return "GT3";
-		}
+		for (size_t i = 0; i < DASHBOARD_THEME_COUNT; ++i)
+			if (DASHBOARD_THEMES[i].id == theme) return DASHBOARD_THEMES[i].name;
+		return "GT3";
+	}
+
+	static size_t dashboardThemeIndex(DashboardTheme theme)
+	{
+		for (size_t i = 0; i < DASHBOARD_THEME_COUNT; ++i)
+			if (DASHBOARD_THEMES[i].id == theme) return i;
+		return 0;
+	}
+
+	void prepareThemePreviewData()
+	{
+		themePreviewData.rpmPercent = 68;
+		themePreviewData.prev_rpmPercent = 68;
+		themePreviewData.rpmRedLineSetting = 78;
+		themePreviewData.engineRpm = 5600;
+		themePreviewData.rpmAlertRangeValid = true;
+		themePreviewData.revLimitAlertActive = false;
+		themePreviewData.gear = "4";
+		themePreviewData.speed = "140";
+		themePreviewData.currentLapTime = "01:24.631";
+		themePreviewData.lastLapTime = "01:25.104";
+		themePreviewData.bestLapTime = "01:24.382";
+		themePreviewData.sessionBestLiveDeltaSeconds = "-0.237";
+		themePreviewData.sessionBestLiveDeltaProgressSeconds = "-0.24";
+		// These legacy protocol fields currently carry REM, POS, LAP and FUEL.
+		themePreviewData.tyrePressureFrontLeft = "4";
+		themePreviewData.tyrePressureFrontRight = "5";
+		themePreviewData.tyrePressureRearLeft = "3/10";
+		themePreviewData.brakeBias = "60";
+		themePreviewData.fuelAlertActive = "60";
+		themePreviewData.tcLevel = "68";
+		themePreviewData.tcFilteredLevel = "62";
+		themePreviewData.absLevel = "36";
+		themePreviewData.absFilteredLevel = "31";
+		themePreviewData.absActive = "1";
+		themePreviewData.tcActive = "0";
+		themePreviewData.lapInvalidated = "False";
+		themePreviewData.tyreTemperatures[0] = 82.0f;
+		themePreviewData.tyreTemperatures[1] = 79.0f;
+		themePreviewData.tyreTemperatures[2] = 76.0f;
+		themePreviewData.tyreTemperatures[3] = 78.0f;
+		themePreviewData.gameRunning = "True";
 	}
 
 	uint8_t normalBrightness() const
@@ -391,6 +444,7 @@ private:
 #endif
 
 		renderedDashboardTheme = activeDashboardTheme;
+		previewDashboardTheme = activeDashboardTheme;
 	}
 
 #if INCLUDE_GT7_WIFI
@@ -530,6 +584,7 @@ public:
 	{
 		tft.init();
 		loadDashboardTheme();
+		prepareThemePreviewData();
 		tft.setRotation(DASHBOARD_DISPLAY_ROTATION);
 		tft.setBrightness(normalBrightness());
 		currentBrightness = normalBrightness();
@@ -1042,7 +1097,8 @@ public:
 
 		if (currentPage == 1)
 		{
-			renderDashboard(static_cast<const DashboardState &>(*this), forceUpdate);
+			renderDashboard(activeDashboardTheme,
+				static_cast<DashboardState &>(*this), forceUpdate);
 		}
 		else if (forceUpdate)
 		{
@@ -1054,12 +1110,12 @@ public:
 
 	void idle() {}
 
-	void renderDashboard(const DashboardState &state, bool forceUpdate)
+	void renderDashboard(DashboardTheme theme, DashboardState &state, bool forceUpdate)
 	{
-		switch (activeDashboardTheme)
+		switch (theme)
 		{
 		case DashboardTheme::Classic:
-			drawPage1Legacy(forceUpdate);
+			drawPage1Legacy(state, forceUpdate);
 			break;
 		case DashboardTheme::Retro:
 			drawRetroDashboard(state, forceUpdate);
@@ -1070,9 +1126,9 @@ public:
 		case DashboardTheme::GT3:
 		default:
 #if GT7_DASHBOARD_LEGACY_UI
-			drawPage1Legacy(forceUpdate);
+			drawPage1Legacy(state, forceUpdate);
 #else
-			drawPage1(forceUpdate);
+			drawPage1(state, forceUpdate);
 #endif
 			break;
 		}
@@ -2070,7 +2126,7 @@ public:
 		return result;
 	}
 
-	void drawPage1(bool forceUpdate = false)
+	void drawPage1(DashboardState &state, bool forceUpdate = false)
 	{
 		static LGFX_Sprite speedSprite(&tft);
 		static LGFX_Sprite currentLapSprite(&tft);
@@ -2127,60 +2183,61 @@ public:
 			tft.setTextDatum(TL_DATUM);
 		}
 
-		drawRpmMeterGT3(forceUpdate);
+		drawRpmMeterGT3(state, forceUpdate);
 		drawDashboardValueBuffered(DashboardLayout::LEFT_X, DashboardLayout::SPEED_VALUE_Y,
 			DashboardLayout::SIDE_WIDTH, DashboardLayout::SPEED_VALUE_H,
-			speed, "gt3Speed", TFT_WHITE, &fonts::DejaVu56,
+			state.speed, "gt3Speed", TFT_WHITE, &fonts::DejaVu56,
 			MC_DATUM, forceUpdate, speedSprite, speedSpriteCreated, 0.72f, 0.72f);
 
 		uint16_t deltaColor = TFT_WHITE;
-		if (sessionBestLiveDeltaSeconds.startsWith("-")) deltaColor = TFT_GREEN;
-		else if (sessionBestLiveDeltaSeconds.startsWith("+") && sessionBestLiveDeltaSeconds != "+0.000") deltaColor = TFT_RED;
+		if (state.sessionBestLiveDeltaSeconds.startsWith("-")) deltaColor = TFT_GREEN;
+		else if (state.sessionBestLiveDeltaSeconds.startsWith("+") && state.sessionBestLiveDeltaSeconds != "+0.000") deltaColor = TFT_RED;
 		drawDashboardValue(DashboardLayout::LEFT_X, DashboardLayout::DELTA_VALUE_Y,
 			DashboardLayout::SIDE_WIDTH, DashboardLayout::DELTA_VALUE_H,
-			sessionBestLiveDeltaSeconds, "gt3Delta", deltaColor, &fonts::FreeSans18pt7b,
+			state.sessionBestLiveDeltaSeconds, "gt3Delta", deltaColor, &fonts::FreeSans18pt7b,
 			MC_DATUM, forceUpdate, 0.72f, 0.92f);
 
 		// The gear datum is tied to the physical screen center, independent of side columns.
-		drawCenteredGear(forceUpdate, gearSprite, gearSpriteCreated);
-		drawGearShiftArcs(forceUpdate);
+		drawCenteredGear(state.gear, forceUpdate, gearSprite, gearSpriteCreated);
+		drawGearShiftArcs(state.gear, forceUpdate);
 		drawTyreTemperatureStrip(DashboardLayout::TYRE_X, DashboardLayout::TYRE_Y,
-			DashboardLayout::TYRE_W, DashboardLayout::TYRE_H, forceUpdate, 1);
+			DashboardLayout::TYRE_W, DashboardLayout::TYRE_H,
+			state.gear, state.tyreTemperatures, forceUpdate, 1);
 		drawPedalProgress(DashboardLayout::BRAKE_BAR_X, DashboardLayout::PEDAL_BAR_Y,
 			DashboardLayout::PEDAL_BAR_W, DashboardLayout::PEDAL_BAR_H,
-			absLevel.toInt(), absFilteredLevel.toInt(), "gt3BrakeBar",
+			state.absLevel.toInt(), state.absFilteredLevel.toInt(), "gt3BrakeBar",
 			tft.color565(218, 220, 224), forceUpdate);
 		drawPedalProgress(DashboardLayout::THROTTLE_BAR_X, DashboardLayout::PEDAL_BAR_Y,
 			DashboardLayout::PEDAL_BAR_W, DashboardLayout::PEDAL_BAR_H,
-			tcLevel.toInt(), tcFilteredLevel.toInt(), "gt3ThrottleBar",
+			state.tcLevel.toInt(), state.tcFilteredLevel.toInt(), "gt3ThrottleBar",
 			tft.color565(218, 220, 224), forceUpdate);
 
 		drawDashboardValue(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_VALUE_Y[0],
 			DashboardLayout::SIDE_WIDTH - DashboardLayout::INNER_PADDING, DashboardLayout::LAP_VALUE_H,
-			bestLapTime, "gt3Best", TFT_WHITE, &fonts::FreeSans12pt7b,
+			state.bestLapTime, "gt3Best", TFT_WHITE, &fonts::FreeSans12pt7b,
 			MC_DATUM, forceUpdate, 0.72f, 0.90f);
 		drawDashboardValue(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_VALUE_Y[1],
 			DashboardLayout::SIDE_WIDTH - DashboardLayout::INNER_PADDING, DashboardLayout::LAP_VALUE_H,
-			lastLapTime, "gt3Last", TFT_WHITE, &fonts::FreeSans12pt7b,
+			state.lastLapTime, "gt3Last", TFT_WHITE, &fonts::FreeSans12pt7b,
 			MC_DATUM, forceUpdate, 0.72f, 0.90f);
 		drawDashboardValueBuffered(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_VALUE_Y[2],
 			DashboardLayout::SIDE_WIDTH - DashboardLayout::INNER_PADDING, DashboardLayout::LAP_VALUE_H,
-			currentLapTime, "gt3Current",
-			lapInvalidated == "True" ? TFT_RED : TFT_WHITE, &fonts::FreeSans12pt7b,
+			state.currentLapTime, "gt3Current",
+			state.lapInvalidated == "True" ? TFT_RED : TFT_WHITE, &fonts::FreeSans12pt7b,
 			MC_DATUM, forceUpdate, currentLapSprite, currentLapSpriteCreated, 0.72f, 0.90f);
 
-		const bool absOn = isActiveValue(absActive);
-		const bool tcsOn = isActiveValue(tcActive);
+		const bool absOn = isActiveValue(state.absActive);
+		const bool tcsOn = isActiveValue(state.tcActive);
 		uint16_t leftColor = TFT_WHITE;
-		if (tyrePressureFrontLeft != "--" && tyrePressureFrontLeft.toFloat() <= 1.0f)
+		if (state.tyrePressureFrontLeft != "--" && state.tyrePressureFrontLeft.toFloat() <= 1.0f)
 			leftColor = TFT_RED;
-		String lapCounterDisplay = tyrePressureRearLeft;
+		String lapCounterDisplay = state.tyrePressureRearLeft;
 		lapCounterDisplay.replace("/", " / ");
 		drawFuelIndicator(DashboardLayout::BOTTOM_X[0] + 4, DashboardLayout::BOTTOM_VALUE_Y,
-			DashboardLayout::BOTTOM_W[0] - 8, DashboardLayout::BOTTOM_VALUE_H, brakeBias, forceUpdate);
+			DashboardLayout::BOTTOM_W[0] - 8, DashboardLayout::BOTTOM_VALUE_H, state.brakeBias, forceUpdate);
 		drawDashboardValue(DashboardLayout::BOTTOM_X[1] + 2, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[1] - 4, DashboardLayout::BOTTOM_VALUE_H,
-			tyrePressureFrontLeft, "gt3Left", leftColor, &fonts::FreeSans12pt7b,
+			state.tyrePressureFrontLeft, "gt3Left", leftColor, &fonts::FreeSans12pt7b,
 			MC_DATUM, forceUpdate, 0.82f, 0.80f);
 		drawDashboardValue(DashboardLayout::BOTTOM_X[2] + 2, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[2] - 4, DashboardLayout::BOTTOM_VALUE_H,
@@ -2188,7 +2245,7 @@ public:
 			MC_DATUM, forceUpdate, 0.56f, 0.74f);
 		drawDashboardValue(DashboardLayout::BOTTOM_X[3] + 2, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[3] - 4, DashboardLayout::BOTTOM_VALUE_H,
-			tyrePressureFrontRight, "gt3Pos", tft.color565(160, 60, 255), &fonts::FreeSans12pt7b,
+			state.tyrePressureFrontRight, "gt3Pos", tft.color565(160, 60, 255), &fonts::FreeSans12pt7b,
 			MC_DATUM, forceUpdate, 0.82f, 0.80f);
 		drawCompactStatus(DashboardLayout::BOTTOM_X[4] + 2, DashboardLayout::BOTTOM_VALUE_Y,
 			DashboardLayout::BOTTOM_W[4] - 4, DashboardLayout::BOTTOM_VALUE_H,
@@ -2287,12 +2344,12 @@ public:
 		}
 	}
 
-	void drawGearShiftArcs(bool forceUpdate)
+	void drawGearShiftArcs(const String &displayGear, bool forceUpdate)
 	{
 		const String id = "gt3GearArcs";
-		if (!forceUpdate && prevData[id] == gear) return;
+		if (!forceUpdate && prevData[id] == displayGear) return;
 
-		const int gearNumber = gear.toInt();
+		const int gearNumber = displayGear.toInt();
 		const int radius = 54;
 		const int segmentSweep = 18;
 		const int segmentStep = 25;
@@ -2332,7 +2389,7 @@ public:
 			drawArcSegment(180 - rightEnd, 180 - rightStart, color);
 		}
 
-		prevData[id] = gear;
+		prevData[id] = displayGear;
 	}
 
 	void drawDashboardValue(int32_t x, int32_t y, int32_t width, int32_t height,
@@ -2392,10 +2449,11 @@ public:
 		prevColor[id] = color;
 	}
 
-	void drawCenteredGear(bool forceUpdate, LGFX_Sprite &sprite, bool &spriteCreated)
+	void drawCenteredGear(const String &displayGear, bool forceUpdate,
+		LGFX_Sprite &sprite, bool &spriteCreated)
 	{
 		const String id = "gt3Gear";
-		if (!forceUpdate && prevData[id] == gear) return;
+		if (!forceUpdate && prevData[id] == displayGear) return;
 
 		const int width = DashboardLayout::GEAR_VALUE_W;
 		const int height = DashboardLayout::GEAR_VALUE_H;
@@ -2408,7 +2466,7 @@ public:
 		if (!spriteCreated)
 		{
 			drawDashboardValue(DashboardLayout::GEAR_VALUE_X, DashboardLayout::GEAR_VALUE_Y,
-				width, height, gear, id, TFT_WHITE, &fonts::DejaVu72,
+				width, height, displayGear, id, TFT_WHITE, &fonts::DejaVu72,
 				MC_DATUM, forceUpdate, 1.25f, 1.25f);
 			return;
 		}
@@ -2419,10 +2477,10 @@ public:
 		sprite.setFont(&fonts::DejaVu72);
 		sprite.setTextDatum(TL_DATUM);
 
-		const int initialX = (width - sprite.textWidth(gear)) / 2;
+		const int initialX = (width - sprite.textWidth(displayGear)) / 2;
 		const int initialY = (height - sprite.fontHeight()) / 2;
 		sprite.fillSprite(TFT_BLACK);
-		sprite.drawString(gear, initialX, initialY);
+		sprite.drawString(displayGear, initialX, initialY);
 
 		int minX = width;
 		int minY = height;
@@ -2449,11 +2507,11 @@ public:
 		}
 
 		sprite.fillSprite(TFT_BLACK);
-		sprite.drawString(gear, correctedX, correctedY);
+		sprite.drawString(displayGear, correctedX, correctedY);
 		sprite.pushSprite(DashboardLayout::GEAR_VALUE_X, DashboardLayout::GEAR_VALUE_Y);
 		sprite.setFont(&fonts::Font0);
 		sprite.setTextSize(1.0f);
-		prevData[id] = gear;
+		prevData[id] = displayGear;
 	}
 
 	void drawFuelIndicator(int32_t x, int32_t y, int32_t width, int32_t height,
@@ -2550,7 +2608,7 @@ public:
 		prevData[id] = state;
 	}
 
-	void drawRpmMeterGT3(bool forceUpdate)
+	void drawRpmMeterGT3(DashboardState &state, bool forceUpdate)
 	{
 		// Shift-warning tuning: alert onset starts at peak brightness.
 		static constexpr float RPM_SHIFT_PULSE_FREQUENCY_HZ = 3.0f;
@@ -2561,60 +2619,60 @@ public:
 
 		const int segmentCount = 36;
 		const int segmentPitch = 8;
-		const int active = constrain((rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
-		const int previous = forceUpdate ? -1 : constrain((prev_rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
-		const String gradientState = String(rpmRedLineSetting) + ":" +
-			String(rpmAlertRangeValid ? 1 : 0);
+		const int active = constrain((state.rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
+		const int previous = forceUpdate ? -1 : constrain((state.prev_rpmPercent * segmentCount + 99) / 100, 0, segmentCount);
+		const String gradientState = String(state.rpmRedLineSetting) + ":" +
+			String(state.rpmAlertRangeValid ? 1 : 0);
 		const bool redlineChanged = prevData["gt3Redline"] != gradientState;
-		const int displayedRpm = ((engineRpm + 25) / 50) * 50;
+		const int displayedRpm = ((state.engineRpm + 25) / 50) * 50;
 		const String rpmValueText = String(displayedRpm);
 		const uint32_t now = millis();
-		const bool rpmWarningActive = rpmAlertRangeValid &&
-			rpmPercent >= rpmRedLineSetting;
-		const bool pulseActive = rpmWarningActive || revLimitAlertActive;
-		const bool revAlertStarted = revLimitAlertActive && !revLimitAlertWasActive;
-		const bool pulseStarted = (pulseActive && !rpmPulseWasActive) || revAlertStarted;
-		const bool pulseEnded = !pulseActive && rpmPulseWasActive;
+		const bool rpmWarningActive = state.rpmAlertRangeValid &&
+			state.rpmPercent >= state.rpmRedLineSetting;
+		const bool pulseActive = rpmWarningActive || state.revLimitAlertActive;
+		const bool revAlertStarted = state.revLimitAlertActive && !state.revLimitAlertWasActive;
+		const bool pulseStarted = (pulseActive && !state.rpmPulseWasActive) || revAlertStarted;
+		const bool pulseEnded = !pulseActive && state.rpmPulseWasActive;
 		const String rpmTextState = rpmValueText + ":" + String(pulseActive ? 1 : 0);
 		const bool rpmTextChanged = forceUpdate ||
 			prevData["gt3RpmValue"] != rpmTextState;
-		if (pulseStarted) rpmPulseStartTime = now;
+		if (pulseStarted) state.rpmPulseStartTime = now;
 
 		float pulsePeakWhiteMix = RPM_SHIFT_PULSE_MIN_WHITE_MIX;
 		if (rpmWarningActive)
 		{
-			const float warningSpan = max(1, 100 - rpmRedLineSetting);
+			const float warningSpan = max(1, 100 - state.rpmRedLineSetting);
 			const float warningProgress = constrain(
-				(rpmPercent - rpmRedLineSetting) / warningSpan, 0.0f, 1.0f);
+				(state.rpmPercent - state.rpmRedLineSetting) / warningSpan, 0.0f, 1.0f);
 			pulsePeakWhiteMix +=
 				(RPM_SHIFT_PULSE_NEAR_MAX_WHITE_MIX - RPM_SHIFT_PULSE_MIN_WHITE_MIX) *
 				warningProgress;
 		}
-		if (revLimitAlertActive)
+		if (state.revLimitAlertActive)
 			pulsePeakWhiteMix = RPM_SHIFT_PULSE_REV_ALERT_WHITE_MIX;
 
 		uint8_t pulseWhiteMix = 0;
 		bool pulseFrameChanged = false;
 		if (pulseActive &&
-			(pulseStarted || now - lastRpmPulseFrameTime >= RPM_SHIFT_PULSE_FRAME_INTERVAL_MS))
+			(pulseStarted || now - state.lastRpmPulseFrameTime >= RPM_SHIFT_PULSE_FRAME_INTERVAL_MS))
 		{
-			const float elapsedSeconds = (now - rpmPulseStartTime) / 1000.0f;
+			const float elapsedSeconds = (now - state.rpmPulseStartTime) / 1000.0f;
 			const float pulse = 0.5f + 0.5f * cosf(
 				TWO_PI * RPM_SHIFT_PULSE_FREQUENCY_HZ * elapsedSeconds);
 			pulseWhiteMix = static_cast<uint8_t>(lroundf(
 				255.0f * pulsePeakWhiteMix * pulse));
-			pulseFrameChanged = pulseStarted || pulseWhiteMix != lastRpmPulseWhiteMix;
-			lastRpmPulseFrameTime = now;
+			pulseFrameChanged = pulseStarted || pulseWhiteMix != state.lastRpmPulseWhiteMix;
+			state.lastRpmPulseFrameTime = now;
 		}
 		else if (pulseActive)
 		{
-			pulseWhiteMix = lastRpmPulseWhiteMix;
+			pulseWhiteMix = state.lastRpmPulseWhiteMix;
 		}
 
 		if (!forceUpdate && active == previous && !redlineChanged &&
 			!pulseFrameChanged && !pulseEnded && !rpmTextChanged) return;
-		const float minAlertPosition = rpmAlertRangeValid
-			? constrain(rpmRedLineSetting / 100.0f, 0.30f, 0.95f)
+		const float minAlertPosition = state.rpmAlertRangeValid
+			? constrain(state.rpmRedLineSetting / 100.0f, 0.30f, 0.95f)
 			: 0.80f;
 		const float gradientStops[] = {
 			0.0f,
@@ -2632,7 +2690,7 @@ public:
 			(segmentCount - 1) * segmentPitch / 2;
 		const int lastSegmentCenterX = DashboardLayout::CENTER_X +
 			(segmentCount - 1) * segmentPitch / 2;
-		const int minAlertMarkerX = rpmAlertRangeValid
+		const int minAlertMarkerX = state.rpmAlertRangeValid
 			? firstSegmentCenterX + lroundf(
 				(lastSegmentCenterX - firstSegmentCenterX) * minAlertPosition)
 			: -1;
@@ -2684,7 +2742,7 @@ public:
 			tft.fillRect(segmentCenterX - segmentWidth / 2, segmentY,
 				segmentWidth, thickness, color);
 		}
-		if (rpmAlertRangeValid)
+		if (state.rpmAlertRangeValid)
 		{
 			const int markerDx = minAlertMarkerX - DashboardLayout::CENTER_X;
 			const int markerBarY = 15 + (markerDx * markerDx) / 1800;
@@ -2734,29 +2792,31 @@ public:
 			}
 			prevData["gt3RpmValue"] = rpmTextState;
 		}
-		prev_rpmPercent = rpmPercent;
+		state.prev_rpmPercent = state.rpmPercent;
 		prevData["gt3Redline"] = gradientState;
 		prevData["gt3MinAlertMarkerX"] = String(minAlertMarkerX);
-		revLimitAlertWasActive = revLimitAlertActive;
-		rpmPulseWasActive = pulseActive;
-		lastRpmPulseWhiteMix = pulseActive ? pulseWhiteMix : 0;
+		state.revLimitAlertWasActive = state.revLimitAlertActive;
+		state.rpmPulseWasActive = pulseActive;
+		state.lastRpmPulseWhiteMix = pulseActive ? pulseWhiteMix : 0;
 	}
 
-	void drawPage1Legacy(bool forceUpdate = false)
+	void drawPage1Legacy(DashboardState &state, bool forceUpdate = false)
 	{
-		drawRpmMeter(0, 0, SCREEN_WIDTH, HALF_CELL_HEIGHT);
-		drawGear(COL[2], COL[1]);
+		drawRpmMeter(state, 0, 0, SCREEN_WIDTH, HALF_CELL_HEIGHT);
+		drawGear(state.gear, COL[2], COL[1]);
 		drawTyreTemperatureStrip(
 			COL[2] + 1,
 			ROW[3] - 22,
 			CELL_WIDTH - 2,
 			18,
+			state.gear,
+			state.tyreTemperatures,
 			forceUpdate);
 
 		drawLapCellSprite(
 			COL[0],
 			ROW[1],
-			bestLapTime,
+			state.bestLapTime,
 			"bestLapTime",
 			"Best Lap",
 			TFT_WHITE,
@@ -2765,7 +2825,7 @@ public:
 		drawLapCellSprite(
 			COL[0],
 			ROW[2],
-			lastLapTime,
+			state.lastLapTime,
 			"lastLapTime",
 			"Last Lap",
 			TFT_WHITE,
@@ -2774,31 +2834,31 @@ public:
 		drawLapCellSprite(
 			COL[0],
 			ROW[3],
-			currentLapTime,
+			state.currentLapTime,
 			"currentLapTime",
 			"Current Lap",
-			lapInvalidated == "True" ? TFT_RED : TFT_WHITE,
+			state.lapInvalidated == "True" ? TFT_RED : TFT_WHITE,
 			forceUpdate);
 
 		// Third Column (speed)
-		drawCell(COL[2], ROW[3], speed, "speed", "Speed", "center", TFT_WHITE, 4, forceUpdate);
+		drawCell(COL[2], ROW[3], state.speed, "speed", "Speed", "center", TFT_WHITE, 4, forceUpdate);
 
 		// 右上：上一圈相對最佳圈的差值。
 		uint16_t lastBestColor = TFT_WHITE;
-		if (sessionBestLiveDeltaSeconds.startsWith("-"))
+		if (state.sessionBestLiveDeltaSeconds.startsWith("-"))
 		{
 			lastBestColor = TFT_GREEN;
 		}
 		else if (
-			sessionBestLiveDeltaSeconds.startsWith("+") &&
-			sessionBestLiveDeltaSeconds != "+0.000")
+			state.sessionBestLiveDeltaSeconds.startsWith("+") &&
+			state.sessionBestLiveDeltaSeconds != "+0.000")
 		{
 			lastBestColor = TFT_RED;
 		}
 		drawCell(
 			SCREEN_WIDTH,
 			ROW[1],
-			sessionBestLiveDeltaSeconds,
+			state.sessionBestLiveDeltaSeconds,
 			"lastBestDifference",
 			"Delta",
 			"right",
@@ -2812,18 +2872,18 @@ public:
 			ROW[2],
 			CELL_WIDTH * 2 - 2,
 			CELL_HEIGHT - 1,
-			constrain(tcLevel.toInt(), 0, 100),
-			constrain(tcFilteredLevel.toInt(), 0, 100),
-			constrain(absLevel.toInt(), 0, 100),
-			constrain(absFilteredLevel.toInt(), 0, 100),
+			constrain(state.tcLevel.toInt(), 0, 100),
+			constrain(state.tcFilteredLevel.toInt(), 0, 100),
+			constrain(state.absLevel.toInt(), 0, 100),
+			constrain(state.absFilteredLevel.toInt(), 0, 100),
 			forceUpdate);
 
 		// ABS、TCS 狀態與油量
-		const bool tcsOn = isActiveValue(tcActive);
-		const bool absOn = isActiveValue(absActive);
+		const bool tcsOn = isActiveValue(state.tcActive);
+		const bool absOn = isActiveValue(state.absActive);
 		const uint16_t tcsColor = tcsOn ? TFT_YELLOW : TFT_DARKGREY;
 		const uint16_t absColor = absOn ? TFT_RED : TFT_DARKGREY;
-		float fuelPercentValue = fuelAlertActive.toFloat();
+		float fuelPercentValue = state.fuelAlertActive.toFloat();
 
 		// Fuel
 		String fuelStatus;
@@ -2877,12 +2937,12 @@ public:
 			tcsOn,
 			TFT_RED,
 			forceUpdate);
-		drawCell(COL[2], ROW[4], brakeBias, "brakeBias", "FUEL", "center", TFT_MAGENTA, 4, forceUpdate);
+		drawCell(COL[2], ROW[4], state.brakeBias, "brakeBias", "FUEL", "center", TFT_MAGENTA, 4, forceUpdate);
 
 		// 剩餘圈數、位置、圈數、低油量警示
-		drawCell(COL[3], ROW[3], tyrePressureFrontLeft, "tyrePressureFrontLeft", "REM", "center", TFT_CYAN, 4, forceUpdate);
-		drawCell(COL[4], ROW[3], tyrePressureFrontRight, "tyrePressureFrontRight", "POS", "center", TFT_CYAN, 4, forceUpdate);
-		drawCell(COL[3], ROW[4], tyrePressureRearLeft, "tyrePressureRearLeft", "LAP", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[3], ROW[3], state.tyrePressureFrontLeft, "tyrePressureFrontLeft", "REM", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[4], ROW[3], state.tyrePressureFrontRight, "tyrePressureFrontRight", "POS", "center", TFT_CYAN, 4, forceUpdate);
+		drawCell(COL[3], ROW[4], state.tyrePressureRearLeft, "tyrePressureRearLeft", "LAP", "center", TFT_CYAN, 4, forceUpdate);
 		drawCell(
 			COL[4],
 			ROW[4],
@@ -2929,21 +2989,21 @@ public:
 		}
 	}
 
-	void drawGear(int32_t x, int32_t y)
+	void drawGear(const String &displayGear, int32_t x, int32_t y)
 	{
 		// draw gear only when it changes
-		if (gear != prev_gear)
+		if (displayGear != prev_gear)
 		{
 			// tft.loadFont("Formula1_Regular_web_072pt7b", SPIFFS);
 			tft.setTextColor(TFT_YELLOW, TFT_BLACK);
 			tft.setTextSize(8);
 			tft.setTextDatum(MC_DATUM);
 			tft.setCursor(x + 12, y + HALF_CELL_HEIGHT);
-			tft.print(gear);
+			tft.print(displayGear);
 			tft.setTextSize(1);
 			tft.setTextDatum(TL_DATUM);
 
-			prev_gear = gear;
+			prev_gear = displayGear;
 		}
 	}
 
@@ -2956,7 +3016,8 @@ public:
 		return false;
 	}
 
-	void drawRpmMeter(int32_t x, int32_t y, int width, int height)
+	void drawRpmMeter(DashboardState &state, int32_t x, int32_t y,
+		int width, int height)
 	{
 		const int borderSize = 2;
 		const int frameHeight = height - 2;
@@ -2970,10 +3031,10 @@ public:
 		const int segmentGap = 2;
 
 		const int safeRpmPercent =
-			constrain(rpmPercent, 0, 100);
+			constrain(state.rpmPercent, 0, 100);
 
 		const int safePrevRpmPercent =
-			constrain(prev_rpmPercent, 0, 100);
+			constrain(state.prev_rpmPercent, 0, 100);
 
 		// 目前應亮幾格
 		int activeSegments =
@@ -2995,9 +3056,9 @@ public:
 		const int segmentWidth =
 			(innerWidth - totalGapWidth) / segmentCount;
 
-		const int markerX = rpmAlertRangeValid
+		const int markerX = state.rpmAlertRangeValid
 			? innerX + lroundf((innerWidth - 1) *
-				constrain(rpmRedLineSetting / 100.0f, 0.0f, 1.0f))
+				constrain(state.rpmRedLineSetting / 100.0f, 0.0f, 1.0f))
 			: -1;
 		const int previousMarkerX = prevData["classicMinAlertMarkerX"].toInt();
 		const bool markerChanged = markerX != previousMarkerX;
@@ -3046,13 +3107,13 @@ public:
 
 				uint16_t segmentColor;
 
-				if (segmentPercent >= rpmRedLineSetting)
+				if (segmentPercent >= state.rpmRedLineSetting)
 				{
 					segmentColor = TFT_RED;
 				}
 				else if (
 					segmentPercent >=
-					rpmRedLineSetting - 5)
+					state.rpmRedLineSetting - 5)
 				{
 					segmentColor = TFT_ORANGE;
 				}
@@ -3112,7 +3173,7 @@ public:
 				markerColor);
 		}
 
-		prev_rpmPercent = safeRpmPercent;
+		state.prev_rpmPercent = safeRpmPercent;
 		prevData["classicMinAlertMarkerX"] = String(markerX);
 	}
 
@@ -3329,13 +3390,15 @@ public:
 		int32_t y,
 		int width,
 		int height,
+		const String &displayGear,
+		const float temperatures[4],
 		bool forceUpdate = false,
 		uint8_t gap = 2)
 	{
 		const int blockWidth = (width - gap) / 2;
 		const int blockHeight = (height - gap) / 2;
 		const String gearId = "tyreTemperatureGear";
-		const bool gearChanged = prevData[gearId] != gear;
+		const bool gearChanged = prevData[gearId] != displayGear;
 
 		for (int tyreIndex = 0; tyreIndex < 4; tyreIndex++)
 		{
@@ -3349,7 +3412,7 @@ public:
 			const int currentHeight = row == 1
 				? height - blockHeight - gap
 				: blockHeight;
-			const float temperature = tyreTemperatures[tyreIndex];
+			const float temperature = temperatures[tyreIndex];
 			const uint16_t color = tyreTemperatureColor(temperature);
 			const String colorId = "tyreTemperatureColor" + String(tyreIndex);
 
@@ -3369,7 +3432,7 @@ public:
 			prevColor[colorId] = color;
 		}
 
-		prevData[gearId] = gear;
+		prevData[gearId] = displayGear;
 	}
 
 	void drawLapCellSprite(
@@ -3881,6 +3944,98 @@ public:
 		}
 	}
 
+	void clearThemePreviewRenderCache()
+	{
+		tft.fillScreen(TFT_BLACK);
+		prevData.clear();
+		prevColor.clear();
+		prev_gear = "";
+		themePreviewData.prev_rpmPercent = 50;
+	}
+
+	void drawThemeSelectorOverlay()
+	{
+		const uint16_t overlay = tft.color565(31, 34, 38);
+		const uint16_t divider = tft.color565(82, 86, 92);
+		const uint16_t inactive = tft.color565(82, 86, 92);
+		const uint16_t applyFill = tft.color565(48, 70, 82);
+
+		tft.fillRect(0, 0, SCREEN_WIDTH, 40, overlay);
+		tft.drawFastHLine(0, 39, SCREEN_WIDTH, divider);
+		tft.setTextDatum(MC_DATUM);
+		tft.setTextColor(TFT_WHITE, overlay);
+		for (int offset = -1; offset <= 1; ++offset)
+		{
+			tft.drawLine(42 + offset, 10, 32 + offset, 20, TFT_WHITE);
+			tft.drawLine(32 + offset, 20, 42 + offset, 30, TFT_WHITE);
+			tft.drawLine(SCREEN_WIDTH - 42 + offset, 10,
+				SCREEN_WIDTH - 32 + offset, 20, TFT_WHITE);
+			tft.drawLine(SCREEN_WIDTH - 32 + offset, 20,
+				SCREEN_WIDTH - 42 + offset, 30, TFT_WHITE);
+		}
+		const String previewThemeName = dashboardThemeName(previewDashboardTheme);
+		tft.setTextFont(2);
+		tft.drawString(previewThemeName, X_CENTER, 17);
+		tft.setTextFont(1);
+
+		const int indicatorWidth = 6;
+		const int indicatorHeight = 3;
+		const int indicatorGap = 3;
+		const int totalWidth = static_cast<int>(DASHBOARD_THEME_COUNT) * indicatorWidth +
+			(static_cast<int>(DASHBOARD_THEME_COUNT) - 1) * indicatorGap;
+		const int indicatorX = (SCREEN_WIDTH - totalWidth) / 2;
+		const size_t previewIndex = dashboardThemeIndex(previewDashboardTheme);
+		const size_t appliedIndex = dashboardThemeIndex(activeDashboardTheme);
+		const uint16_t appliedColor = tft.color565(92, 176, 112);
+		for (size_t i = 0; i < DASHBOARD_THEME_COUNT; ++i)
+		{
+			const uint16_t indicatorColor = i == appliedIndex
+				? appliedColor
+				: (i == previewIndex ? TFT_LIGHTGREY : inactive);
+			tft.fillRect(indicatorX + static_cast<int>(i) *
+				(indicatorWidth + indicatorGap), 31,
+				indicatorWidth, indicatorHeight, indicatorColor);
+		}
+
+		tft.fillRect(0, 198, SCREEN_WIDTH, 42, overlay);
+		tft.drawFastHLine(0, 198, SCREEN_WIDTH, divider);
+		tft.fillRoundRect(12, 204, 140, 30, 5, overlay);
+		tft.drawRoundRect(12, 204, 140, 30, 5, TFT_LIGHTGREY);
+		tft.fillRoundRect(168, 204, 140, 30, 5, applyFill);
+		tft.drawRoundRect(168, 204, 140, 30, 5, TFT_LIGHTGREY);
+		tft.setTextColor(TFT_WHITE, overlay);
+		tft.drawString("CANCEL", 82, 219, 2);
+		tft.setTextColor(TFT_WHITE, applyFill);
+		tft.drawString("APPLY", 238, 219, 2);
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	void drawTapToReturnHint()
+	{
+		const uint16_t hintFill = tft.color565(210, 82, 126);
+		const int hintWidth = 112;
+		const int hintHeight = 20;
+		const int hintX = (SCREEN_WIDTH - hintWidth) / 2;
+		const int hintY = SCREEN_HEIGHT - 30;
+		tft.fillRoundRect(hintX, hintY, hintWidth, hintHeight,
+			hintHeight / 2, hintFill);
+		tft.setTextDatum(MC_DATUM);
+		tft.setTextColor(TFT_WHITE, hintFill);
+		tft.drawString("TAP TO RETURN", X_CENTER,
+			hintY + hintHeight / 2, 1);
+		tft.setTextDatum(TL_DATUM);
+	}
+
+	void renderThemePreview()
+	{
+		clearThemePreviewRenderCache();
+		renderDashboard(previewDashboardTheme, themePreviewData, true);
+		if (previewFullscreen)
+			drawTapToReturnHint();
+		else
+			drawThemeSelectorOverlay();
+	}
+
 	void drawSettingsScreen(int pressedButton = -1)
 	{
 		tft.fillScreen(TFT_BLACK);
@@ -3897,23 +4052,7 @@ public:
 		}
 		else if (settingsScreen == SettingsScreen::ThemeSelection)
 		{
-			tft.setTextColor(TFT_WHITE, TFT_BLACK);
-			tft.drawString("SELECT THEME", X_CENTER, 22, 4);
-			const DashboardTheme themes[] = {
-				DashboardTheme::Classic,
-				DashboardTheme::GT3,
-				DashboardTheme::Retro,
-				DashboardTheme::Radar};
-			for (int i = 0; i < 4; ++i)
-			{
-				const bool active = activeDashboardTheme == themes[i];
-				const int buttonX = i % 2 == 0 ? 20 : 165;
-				const int buttonY = i < 2 ? 50 : 112;
-				drawSettingsButton(buttonX, buttonY, 135, 50,
-					dashboardThemeName(themes[i]),
-					pressedButton == i, active);
-			}
-			drawSettingsButton(30, 180, 260, 38, "BACK", pressedButton == 4);
+			renderThemePreview();
 		}
 		else if (settingsScreen == SettingsScreen::DeviceSettings)
 		{
@@ -3955,24 +4094,8 @@ public:
 		}
 		else if (settingsScreen == SettingsScreen::ThemeSelection)
 		{
-			if (button >= 0 && button <= 3)
-			{
-				const DashboardTheme themes[] = {
-					DashboardTheme::Classic,
-					DashboardTheme::GT3,
-					DashboardTheme::Retro,
-					DashboardTheme::Radar};
-				const bool active = activeDashboardTheme == themes[button];
-				const int buttonX = button % 2 == 0 ? 20 : 165;
-				const int buttonY = button < 2 ? 50 : 112;
-				drawSettingsButton(buttonX, buttonY, 135, 50,
-					dashboardThemeName(themes[button]),
-					pressed, active);
-			}
-			else if (button == 4)
-			{
-				drawSettingsButton(30, 180, 260, 38, "BACK", pressed);
-			}
+			// Preview controls intentionally have no pressed-state redraw. Avoiding
+			// a second full overlay pass keeps touch feedback flicker-free.
 		}
 		else if (settingsScreen == SettingsScreen::DeviceSettings)
 		{
@@ -4003,6 +4126,12 @@ public:
 		screenOffByUser = false;
 		tft.setBrightness(normalBrightness());
 		currentBrightness = normalBrightness();
+		if (screen == SettingsScreen::ThemeSelection &&
+			settingsScreen != SettingsScreen::ThemeSelection)
+		{
+			previewDashboardTheme = activeDashboardTheme;
+			previewFullscreen = false;
+		}
 		settingsScreen = screen;
 		wifiResetConfirmOpen = screen == SettingsScreen::WifiResetConfirmation;
 		settingsPressedButton = -1;
@@ -4013,6 +4142,7 @@ public:
 	void closeSettings()
 	{
 		settingsScreen = SettingsScreen::Closed;
+		previewFullscreen = false;
 		wifiResetConfirmOpen = false;
 		settingsPressedButton = -1;
 		redrawAfterWifiResetDialog();
@@ -4099,13 +4229,13 @@ public:
 		}
 		else if (settingsScreen == SettingsScreen::ThemeSelection)
 		{
-			for (int i = 0; i < 4; ++i)
-			{
-				const int buttonX = i % 2 == 0 ? 20 : 165;
-				const int buttonY = i < 2 ? 50 : 112;
-				if (touchInside(buttonX, buttonY, 135, 50)) return i;
-			}
-			if (touchInside(30, 180, 260, 38)) return 4;
+			if (previewFullscreen) return 5;
+			if (touchInside(0, 0, SCREEN_WIDTH / 3, 40)) return 0;
+			if (touchInside(SCREEN_WIDTH * 2 / 3, 0,
+				SCREEN_WIDTH - SCREEN_WIDTH * 2 / 3, 40)) return 1;
+			if (touchInside(0, 40, SCREEN_WIDTH, 158)) return 2;
+			if (touchInside(0, 198, SCREEN_WIDTH / 2, 42)) return 3;
+			if (touchInside(SCREEN_WIDTH / 2, 198, SCREEN_WIDTH / 2, 42)) return 4;
 		}
 		else if (settingsScreen == SettingsScreen::DeviceSettings)
 		{
@@ -4135,24 +4265,42 @@ public:
 		}
 		else if (settingsScreen == SettingsScreen::ThemeSelection)
 		{
-			if (button >= 0 && button <= 3)
+			if (button == 0 || button == 1)
 			{
-				const DashboardTheme themes[] = {
-					DashboardTheme::Classic,
-					DashboardTheme::GT3,
-					DashboardTheme::Retro,
-					DashboardTheme::Radar};
-				const DashboardTheme selectedTheme = themes[button];
+				const size_t currentIndex = dashboardThemeIndex(previewDashboardTheme);
+				const size_t nextIndex = button == 0
+					? (currentIndex + DASHBOARD_THEME_COUNT - 1) % DASHBOARD_THEME_COUNT
+					: (currentIndex + 1) % DASHBOARD_THEME_COUNT;
+				previewDashboardTheme = DASHBOARD_THEMES[nextIndex].id;
+				settingsLastInteractionTime = millis();
+				renderThemePreview();
+			}
+			else if (button == 2)
+			{
+				previewFullscreen = true;
+				settingsLastInteractionTime = millis();
+				renderThemePreview();
+			}
+			else if (button == 3)
+			{
+				closeSettings();
+			}
+			else if (button == 4)
+			{
+				const DashboardTheme selectedTheme = previewDashboardTheme;
 				const bool changed = selectedTheme != activeDashboardTheme;
 				settingsScreen = SettingsScreen::Closed;
 				wifiResetConfirmOpen = false;
 				settingsPressedButton = -1;
+				previewFullscreen = false;
 				selectDashboardTheme(selectedTheme, true);
 				if (!changed) redrawAfterWifiResetDialog();
 			}
-			else if (button == 4)
+			else if (button == 5)
 			{
-				showSettingsScreen(SettingsScreen::Main);
+				previewFullscreen = false;
+				settingsLastInteractionTime = millis();
+				renderThemePreview();
 			}
 		}
 		else if (settingsScreen == SettingsScreen::DeviceSettings)
