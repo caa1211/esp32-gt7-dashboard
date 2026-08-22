@@ -153,7 +153,30 @@ Use this sequence for every public firmware release:
    to GitHub Pages.
 10. Verify <https://caa1211.github.io/esp32-gt7-dashboard/> and perform another installer
     test from the deployed site.
-11. Create the Git tag manually only after the deployed release has been verified.
+11. After the deployed release has been verified, create an annotated Git tag on the
+    accepted release commit. Use the `vX.Y.Z` naming convention and keep the tag version
+    identical to `VERSION`:
+
+    ```bash
+    git tag -a v1.2.3 -m "Release 1.2.3"
+    ```
+
+    If the release commit is not currently checked out, specify it explicitly:
+
+    ```bash
+    git tag -a v1.2.3 <release-commit> -m "Release 1.2.3"
+    ```
+
+12. Push the release tag and verify that it points to the intended commit on GitHub:
+
+    ```bash
+    git push origin v1.2.3
+    git show --no-patch v1.2.3
+    ```
+
+    Pushing the branch does not push a newly created tag automatically. A GitHub Release
+    may optionally be created from this tag, but it is separate from the firmware and
+    GitHub Pages publishing process.
 
 GitHub Actions does **not** install PlatformIO, build firmware, run the local publishing
 script, or generate binaries. It deploys the committed files exactly as they exist under
