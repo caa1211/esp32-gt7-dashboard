@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.4.2",
+      "notes": [
+        "Improved Radar theme readability with larger lap, position, fuel, remaining-lap and delta values.",
+        "Refined Radar lap formatting with compact spacing around the separator.",
+        "Improved Retro theme readability with larger current time, fuel, remaining-lap, lap and position values.",
+        "Adjusted Retro current-time and delta placement to prevent overlap."
+      ],
+      "manifests": {
+        "ili9341": "versions/1.4.2/manifest-ili9341.json",
+        "st7789": "versions/1.4.2/manifest-st7789.json"
+      }
+    },
+    {
       "version": "1.4.1",
       "notes": [
         "Fixed touch wake-up when the display sleeps while Settings is open.",
