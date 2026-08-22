@@ -2518,7 +2518,7 @@ public:
 			tft.drawFastVLine(208, 189, 15, dark);
 			tft.fillRect(205, 186, 4, 4, dark);
 			tft.fillRect(209, 190, 3, 7, dark);
-			tft.drawString("FUEL", 198, 222, 1);
+			tft.drawString("FUEL", 198, 220, 1);
 		}
 
 		const bool absOn = isActiveValue(state.absActive);
@@ -2553,7 +2553,7 @@ public:
 			tft.setTextColor(absOn ? pale : absColor, absOn ? absColor : pale);
 			tft.drawString("ABS", 244, 194, 1);
 			tft.setTextColor(darkest, pale);
-			tft.drawString("ABS", 244, 223, 1);
+			tft.drawString("ABS", 244, 221, 1);
 		}
 
 		if (tcsChanged)
@@ -2561,12 +2561,11 @@ public:
 			tft.fillRect(268, 165, 38, 60, pale);
 			tft.setTextColor(darkest, pale);
 		// Chunky rear-view slipping-car glyph, drawn for this 42 px status cell.
-		// Symmetrical, flat-topped trapezoid roof with an open rear window.
-		tft.fillRect(285, 181, 10, 2, tcsColor);
-		tft.fillRect(283, 183, 2, 2, tcsColor);
-		tft.fillRect(295, 183, 2, 2, tcsColor);
-		tft.fillRect(281, 185, 2, 4, tcsColor);
-		tft.fillRect(297, 185, 2, 4, tcsColor);
+		// Crisp symmetrical trapezoid roof; the inset trapezoid is the rear window.
+		tft.fillTriangle(284, 181, 294, 181, 279, 189, tcsColor);
+		tft.fillTriangle(294, 181, 299, 189, 279, 189, tcsColor);
+		tft.fillTriangle(285, 183, 293, 183, 282, 188, pale);
+		tft.fillTriangle(293, 183, 296, 188, 282, 188, pale);
 
 		// Solid rear body with two square, background-colour lamps.
 		tft.fillRect(279, 189, 22, 10, tcsColor);
@@ -2575,29 +2574,24 @@ public:
 		tft.fillRect(281, 199, 5, 3, tcsColor);
 		tft.fillRect(294, 199, 5, 3, tcsColor);
 
-		// Two separate, same-direction S-shaped skid trails with softened turns.
-		tft.drawLine(283, 202, 284, 203, tcsColor);
-		tft.drawLine(284, 203, 278, 206, tcsColor);
-		tft.drawLine(278, 206, 280, 208, tcsColor);
-		tft.drawFastHLine(280, 209, 5, tcsColor);
-		tft.drawLine(296, 202, 297, 203, tcsColor);
-		tft.drawLine(297, 203, 291, 206, tcsColor);
-		tft.drawLine(291, 206, 293, 208, tcsColor);
-		tft.drawFastHLine(293, 209, 5, tcsColor);
-		// Keep the trails readable on the physical LCD without adding corner blobs.
-		tft.drawLine(283, 203, 279, 206, tcsColor);
-		tft.drawLine(296, 203, 292, 206, tcsColor);
-		// A second row makes both trails one pixel heavier without changing shape.
-		tft.drawLine(283, 204, 279, 207, tcsColor);
-		tft.drawLine(279, 207, 280, 209, tcsColor);
-		tft.drawLine(296, 204, 292, 207, tcsColor);
-		tft.drawLine(292, 207, 293, 209, tcsColor);
-		// Third pixel of trail weight.
-		tft.drawLine(283, 205, 279, 208, tcsColor);
-		tft.drawLine(279, 208, 280, 210, tcsColor);
-		tft.drawLine(296, 205, 292, 208, tcsColor);
-		tft.drawLine(292, 208, 293, 210, tcsColor);
-		tft.drawString("TCS", 290, 223, 1);
+		// Rounded pixel S trails: more intermediate points remove sharp elbows.
+		static constexpr int8_t SKID[][2] = {
+			{3, 0}, {4, 1}, {3, 2}, {1, 3}, {-1, 4},
+			{-2, 5}, {-1, 6}, {1, 7}, {4, 7}};
+		for (int trail = 0; trail < 2; ++trail)
+		{
+			const int originX = 280 + trail * 13;
+			for (size_t i = 0; i < sizeof(SKID) / sizeof(SKID[0]); ++i)
+			{
+				const int x = originX + SKID[i][0];
+				const int y = 202 + SKID[i][1];
+				tft.fillCircle(x, y, 1, tcsColor);
+				if (i > 0)
+					tft.drawLine(originX + SKID[i - 1][0], 202 + SKID[i - 1][1],
+						x, y, tcsColor);
+			}
+		}
+		tft.drawString("TCS", 290, 221, 1);
 		}
 
 		// Three equal status columns.
