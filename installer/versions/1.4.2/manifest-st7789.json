@@ -1,6 +1,6 @@
 {
   "name": "ESP32 GT7 Dashboard (ST7789)",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "new_install_prompt_erase": true,
   "builds": [
     {

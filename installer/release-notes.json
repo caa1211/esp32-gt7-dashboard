@@ -1,4 +1,10 @@
 {
+  "1.4.2": [
+    "Improved Radar theme readability with larger lap, position, fuel, remaining-lap and delta values.",
+    "Refined Radar lap formatting with compact spacing around the separator.",
+    "Improved Retro theme readability with larger current time, fuel, remaining-lap, lap and position values.",
+    "Adjusted Retro current-time and delta placement to prevent overlap."
+  ],
   "1.4.1": [
     "Fixed touch wake-up when the display sleeps while Settings is open.",
     "Bundled the customized GT7 UDP parser directly with the project for reliable clean builds.",

@@ -1356,9 +1356,9 @@ public:
 		drawRetroTextValue(190, 103, 124, 17, state.lastLapTime, "retroLast", ink,
 			2, MR_DATUM, forceUpdate);
 		const uint16_t currentColor = state.lapInvalidated == "True" ? red : ink;
-		drawRetroTextValueBuffered(190, 136, 124, 12, state.currentLapTime,
-			"retroCurrent", currentColor, 1, MR_DATUM, forceUpdate,
-			currentSprite, currentSpriteCreated);
+		drawRetroTextValueBuffered(190, 133, 124, 14, state.currentLapTime,
+			"retroCurrent", currentColor, 2, MR_DATUM, forceUpdate,
+			currentSprite, currentSpriteCreated, 0.9f, 0.82f);
 
 		uint16_t deltaColor = ink;
 		if (state.sessionBestLiveDeltaSeconds.startsWith("-")) deltaColor = green;
@@ -1368,15 +1368,15 @@ public:
 			"retroDelta", deltaColor, 1, MR_DATUM, forceUpdate);
 
 		drawRetroTextValue(7, 177, 68, 18, state.brakeBias, "retroFuel", ink,
-			2, MC_DATUM, forceUpdate, 0.9f, 0.95f);
+			2, MC_DATUM, forceUpdate);
 		drawRetroTextValue(85, 177, 67, 18, state.tyrePressureFrontLeft, "retroRem", ink,
-			2, MC_DATUM, forceUpdate, 0.9f, 0.95f);
+			2, MC_DATUM, forceUpdate);
 		String lap = state.tyrePressureRearLeft;
 		lap.replace("/", "/");
 		drawRetroTextValue(162, 177, 70, 18, lap, "retroLap", ink,
-			2, MC_DATUM, forceUpdate, 0.78f, 0.95f);
+			2, MC_DATUM, forceUpdate);
 		drawRetroTextValue(242, 177, 70, 18, state.tyrePressureFrontRight, "retroPos", ink,
-			2, MC_DATUM, forceUpdate, 0.9f, 0.95f);
+			2, MC_DATUM, forceUpdate);
 
 		String tyres;
 		const char *names[] = {"FL", "FR", "RL", "RR"};
@@ -1415,6 +1415,39 @@ public:
 		tft.setTextSize(1.0f);
 		tft.setTextDatum(TL_DATUM);
 		prevData[id] = cacheState;
+	}
+
+	void drawRadarLapValue(int32_t x, int32_t y, int32_t width,
+		int32_t height, const String &value, bool forceUpdate)
+	{
+		if (!forceUpdate && prevData["radarLap"] == value) return;
+		tft.fillRect(x, y, width, height, TFT_BLACK);
+		tft.setTextColor(TFT_WHITE, TFT_BLACK);
+		tft.setTextDatum(ML_DATUM);
+		tft.setTextSize(0.98f, 1.0f);
+		tft.setTextFont(2);
+
+		const int separator = value.indexOf('/');
+		if (separator > 0 && separator < value.length() - 1)
+		{
+			const String currentLap = value.substring(0, separator);
+			const String totalLaps = value.substring(separator + 1);
+			int32_t textX = x + 1;
+			tft.drawString(currentLap, textX, y + height / 2);
+			textX += tft.textWidth(currentLap) + 2;
+			tft.drawString("/", textX, y + height / 2);
+			textX += tft.textWidth("/") + 2;
+			tft.drawString(totalLaps, textX, y + height / 2);
+		}
+		else
+		{
+			tft.drawString(value, x + 1, y + height / 2);
+		}
+
+		tft.setTextFont(1);
+		tft.setTextSize(1.0f);
+		tft.setTextDatum(TL_DATUM);
+		prevData["radarLap"] = value;
 	}
 
 	void drawRadarValueBuffered(int32_t x, int32_t y, int32_t width,
@@ -1753,18 +1786,17 @@ public:
 		}
 
 		drawRadarRpm(state, redraw);
-		drawRadarValue(7, 36, 56, 24, state.tyrePressureRearLeft,
-			"radarLap", TFT_WHITE, 2, ML_DATUM, redraw, 0.78f, 0.9f);
+		drawRadarLapValue(7, 36, 56, 24, state.tyrePressureRearLeft, redraw);
 		drawRadarValue(7, 80, 56, 24, state.tyrePressureFrontRight,
-			"radarPos", TFT_WHITE, 2, ML_DATUM, redraw, 0.9f, 0.95f);
+			"radarPos", TFT_WHITE, 2, ML_DATUM, redraw, 1.05f, 1.0f);
 		drawRadarValue(7, 124, 56, 24, state.bestLapTime,
 			"radarBest", TFT_WHITE, 1, ML_DATUM, redraw);
 		drawRadarValue(7, 168, 56, 24, state.lastLapTime,
 			"radarLast", TFT_WHITE, 1, ML_DATUM, redraw);
 		drawRadarValue(257, 36, 57, 24, state.brakeBias,
-			"radarFuel", TFT_WHITE, 2, MR_DATUM, redraw, 0.85f, 0.95f);
+			"radarFuel", TFT_WHITE, 2, MR_DATUM, redraw, 1.0f, 1.0f);
 		drawRadarValue(257, 80, 57, 24, state.tyrePressureFrontLeft,
-			"radarRem", TFT_WHITE, 2, MR_DATUM, redraw, 0.85f, 0.95f);
+			"radarRem", TFT_WHITE, 2, MR_DATUM, redraw, 1.0f, 1.0f);
 		drawRadarValueBuffered(257, 124, 57, 22, state.currentLapTime,
 			"radarCurrent", state.lapInvalidated == "True" ? red : TFT_WHITE,
 			1, MR_DATUM, redraw, currentSprite, currentSpriteCreated);
@@ -1780,7 +1812,7 @@ public:
 		if (deltaDisplay.startsWith("+") || deltaDisplay.startsWith("-"))
 			deltaDisplay = deltaDisplay.substring(0, 1) + " " + deltaDisplay.substring(1);
 		drawRadarValue(106, 218, 112, 17, deltaDisplay,
-			"radarDelta", deltaColor, 2, MC_DATUM, redraw);
+			"radarDelta", deltaColor, 2, MC_DATUM, redraw, 1.14f, 1.0f);
 		drawRadarStatusDot(29, 226, isActiveValue(state.absActive), "radarAbs",
 			yellow, muted, redraw);
 		drawRadarStatusDot(75, 226, isActiveValue(state.tcActive), "radarTcs",
