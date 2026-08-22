@@ -1,6 +1,6 @@
 {
   "name": "ESP32 GT7 Dashboard (ILI9341)",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "new_install_prompt_erase": true,
   "builds": [
     {

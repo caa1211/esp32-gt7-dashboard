@@ -4184,6 +4184,39 @@ public:
 			return;
 		}
 
+		// Waking always takes precedence over Settings touch targets. The first
+		// tap only restores the display; it never activates a hidden button.
+		if (screenSleeping)
+		{
+			if (!isTouched && wasTouched)
+			{
+				screenSleeping = false;
+				screenOffByUser = false;
+				fadeScreenOn();
+				forceUpdate = true;
+				if (!previousGameRunning)
+				{
+					gameStoppedTimerStarted = true;
+					gameStoppedTime = millis();
+				}
+				else
+				{
+					gameStoppedTimerStarted = false;
+				}
+
+				if (settingsScreen != SettingsScreen::Closed)
+					drawSettingsScreen();
+			}
+			wasTouched = isTouched;
+			return;
+		}
+
+		if (isTouched && !wasTouched && !previousGameRunning)
+		{
+			gameStoppedTimerStarted = true;
+			gameStoppedTime = millis();
+		}
+
 		if (settingsScreen != SettingsScreen::Closed)
 		{
 			if (!isTouched && settingsLastInteractionTime != 0 &&
@@ -4218,27 +4251,8 @@ public:
 
 		if (!isTouched && wasTouched)
 		{
-			if (screenSleeping)
-			{
-				screenSleeping = false;
-				screenOffByUser = false;
-				fadeScreenOn();
-				forceUpdate = true;
-				if (!previousGameRunning)
-				{
-					gameStoppedTimerStarted = true;
-					gameStoppedTime = millis();
-				}
-				else
-				{
-					gameStoppedTimerStarted = false;
-				}
-			}
-			else
-			{
-				showSettingsScreen(SettingsScreen::Main);
-				waitForReleaseAfterScreenChange = true;
-			}
+			showSettingsScreen(SettingsScreen::Main);
+			waitForReleaseAfterScreenChange = true;
 		}
 
 		wasTouched = isTouched;
