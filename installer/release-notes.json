@@ -1,4 +1,10 @@
 {
+  "1.6.0": [
+    "Added the Mono dashboard theme with a minimalist black-and-white digital instrument layout.",
+    "Added a segmented monochrome shift-light, dynamic GT7 alert marker and shift-warning pulse.",
+    "Refined Mono timing, position, lap, delta, fuel, remaining-lap, tyre, pedal and driving-aid presentation for 320 x 240 displays.",
+    "Improved Classic dashboard recovery when a temporary sprite allocation fails after switching themes."
+  ],
   "1.5.0": [
     "Redesigned Theme Selection with live renderer previews and fixed mock telemetry data.",
     "Added looping theme navigation, compact applied/preview indicators, and persistent Apply or non-destructive Cancel actions.",

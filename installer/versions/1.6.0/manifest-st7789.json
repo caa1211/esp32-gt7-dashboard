@@ -1,5 +1,5 @@
 {
-  "name": "ESP32 GT7 Dashboard (ILI9341)",
+  "name": "ESP32 GT7 Dashboard (ST7789)",
   "version": "1.6.0",
   "new_install_prompt_erase": true,
   "builds": [
@@ -7,19 +7,19 @@
       "chipFamily": "ESP32",
       "parts": [
         {
-          "path": "firmware/bootloader.bin",
+          "path": "bootloader.bin",
           "offset": 4096
         },
         {
-          "path": "firmware/partitions.bin",
+          "path": "partitions.bin",
           "offset": 32768
         },
         {
-          "path": "firmware/boot_app0.bin",
+          "path": "boot_app0.bin",
           "offset": 57344
         },
         {
-          "path": "firmware/firmware-ili9341.bin",
+          "path": "firmware-st7789.bin",
           "offset": 65536
         }
       ]

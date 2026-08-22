@@ -20,6 +20,7 @@ The included themes are:
 | `GT3` | 1 | `drawPage1()` | Default dark motorsport UI |
 | `Retro` | 2 | `drawRetroDashboard()` | Warm paper-and-ink instrument UI |
 | `Radar` | 3 | `drawRadarDashboard()` | Circular tachometer-focused dark UI |
+| `Mono` | 4 | `drawMonoDashboard()` | Monochrome retro-digital instrument UI |
 
 Persisted values are part of the device settings format. Never reorder or reuse an existing enum value.
 
