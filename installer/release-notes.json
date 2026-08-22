@@ -1,4 +1,9 @@
 {
+  "1.4.1": [
+    "Fixed touch wake-up when the display sleeps while Settings is open.",
+    "Bundled the customized GT7 UDP parser directly with the project for reliable clean builds.",
+    "Reduced telemetry heap fragmentation by replacing per-packet dynamic buffers and removing packet dump logging."
+  ],
   "1.4.0": [
     "Added the Radar dashboard theme with a circular telemetry-driven shift-light display.",
     "Expanded Theme Selection to a four-theme 2 x 2 layout while preserving saved enum values.",
