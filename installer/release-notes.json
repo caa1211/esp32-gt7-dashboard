@@ -1,4 +1,7 @@
 {
+  "1.9.1": [
+    "Redesigned the Wi-Fi setup screen with a QR code for joining GT7-DASH-SETUP, clearer manual connection instructions and the setup address."
+  ],
   "1.9.0": [
     "Added the Endurance dashboard theme, optimized for at-a-glance race telemetry with shift lights, a central gear display, lap timing, tyre temperatures, pedal inputs and fuel strategy."
   ],
