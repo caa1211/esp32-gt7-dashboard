@@ -329,6 +329,7 @@
 				const int y = 218 + row * 9;
 				tft.drawString(row == 0 ? "B" : "T", 179, y + 4, 1);
 				tft.drawRect(190, y, 122, 7, dark);
+                if ((row == 0 ? state.absLevel : state.tcLevel) == "--") tft.drawString("--", 240, y + 4, 1);
 				if (fallbackValues[row] > 0)
 					tft.fillRect(191, y + 1,
 						120 * fallbackValues[row] / 100, 5, darkest);
@@ -356,6 +357,7 @@
 			const int y = 2 + row * 9;
 			sprite.drawString(row == 0 ? "B" : "T", 174, y + 4, 1);
 			sprite.drawRect(185, y, 122, 7, dark);
+            if ((row == 0 ? state.absLevel : state.tcLevel) == "--") sprite.drawString("--", 235, y + 4, 1);
 			if (values[row] > 0)
 				sprite.fillRect(186, y + 1, 120 * values[row] / 100, 5, darkest);
 		}

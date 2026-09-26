@@ -77,11 +77,11 @@
 			state.gear, state.tyreTemperatures, forceUpdate, 1);
 		drawPedalProgress(DashboardLayout::BRAKE_BAR_X, DashboardLayout::PEDAL_BAR_Y,
 			DashboardLayout::PEDAL_BAR_W, DashboardLayout::PEDAL_BAR_H,
-			state.absLevel.toInt(), state.absFilteredLevel.toInt(), "gt3BrakeBar",
+			state.absLevel == "--" ? -1 : state.absLevel.toInt(), state.absFilteredLevel.toInt(), "gt3BrakeBar",
 			tft.color565(218, 220, 224), forceUpdate);
 		drawPedalProgress(DashboardLayout::THROTTLE_BAR_X, DashboardLayout::PEDAL_BAR_Y,
 			DashboardLayout::PEDAL_BAR_W, DashboardLayout::PEDAL_BAR_H,
-			state.tcLevel.toInt(), state.tcFilteredLevel.toInt(), "gt3ThrottleBar",
+			state.tcLevel == "--" ? -1 : state.tcLevel.toInt(), state.tcFilteredLevel.toInt(), "gt3ThrottleBar",
 			tft.color565(218, 220, 224), forceUpdate);
 
 		drawDashboardValue(DashboardLayout::RIGHT_TEXT_X, DashboardLayout::LAP_VALUE_Y[0],
@@ -443,6 +443,16 @@
 		int inputPercent, int appliedPercent, const String &id,
 		uint16_t appliedColor, bool forceUpdate)
 	{
+        if (inputPercent < 0) {
+            if (forceUpdate || prevData[id] != "--") {
+                tft.fillRect(x, y, width, height, TFT_BLACK);
+                tft.drawRoundRect(x, y, width, height, 3, TFT_DARKGREY);
+                tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK); tft.setTextDatum(MC_DATUM);
+                tft.drawString("--", x + width / 2, y + height / 2, 1);
+                prevData[id] = "--";
+            }
+            return;
+        }
 		inputPercent = constrain(inputPercent, 0, 100);
 		appliedPercent = constrain(appliedPercent, 0, 100);
 		const String state = String(inputPercent) + ":" + String(appliedPercent);
@@ -518,7 +528,7 @@
 			String(state.rpmAlertRangeValid ? 1 : 0);
 		const bool redlineChanged = prevData["gt3Redline"] != gradientState;
 		const int displayedRpm = ((state.engineRpm + 25) / 50) * 50;
-		const String rpmValueText = String(displayedRpm);
+		const String rpmValueText = state.engineRpm < 0 ? "--" : String(displayedRpm);
 		const uint32_t now = millis();
 		const bool rpmWarningActive = state.rpmAlertRangeValid &&
 			state.rpmPercent >= state.rpmRedLineSetting;

@@ -5,8 +5,10 @@
 
 > **Theme development:** See the [theme guide](docs/THEME_DEVELOPMENT.md) and [implementation plan](docs/THEME_SWITCH_PLAN.md) for architecture, workflow and hardware acceptance checks.
 
-A standalone **Gran Turismo 7 dashboard** running entirely on an ESP32.
-No SimHub • No PC • Auto PS5 Discovery
+An ESP32 dashboard with **direct GT7 Wi-Fi** and **SimHub USB** telemetry.
+GT7 needs no PC or SimHub; PC games use the bundled SimHub Custom Protocol.
+
+> **Source-tree feature:** Dual-source support requires a build of this source. The web installer continues to serve published releases. See [SimHub USB setup](SIMHUB_README.md).
 
 <p align="center">
   <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
@@ -41,8 +43,8 @@ Simply connect your ESP32 to the same Wi-Fi network as your PS5 and enjoy real-t
 - 🚗 Direct GT7 telemetry over Wi-Fi
 - 📡 Automatic PS5 discovery
 - 🔍 No IP address configuration required
-- ⚡ No SimHub required
-- 💻 No PC required after installation
+- 🔌 Optional SimHub USB for PC games, with [one formula for all themes](simhub/custom-protocol.txt)
+- ⚡ No SimHub or PC required for direct GT7 after installation
 - 📶 Built-in Wi-Fi configuration portal
 - 🏁 Current, Last and Best lap times
 - ⏱ Live Delta
@@ -117,46 +119,24 @@ procedure in [docs/RELEASING.md](docs/RELEASING.md).
 
 ### First Time Setup
 
-When powered on for the first time (or after resetting Wi-Fi), the dashboard automatically starts Wi-Fi setup mode.
+On a fresh device, complete Touch Setup first, then choose **DIRECT GT7** or **SIMHUB USB**. The selected connection is saved for later boots.
 
-1. Connect your phone or computer to the Wi-Fi network:
+- **SimHub USB:** Wi-Fi stays off. Connect a data-capable USB cable to the PC and follow [SimHub setup](SIMHUB_README.md).
+- **Direct GT7:** if no network is saved, the firmware opens Wi-Fi Setup automatically. Join **GT7-DASH-SETUP** on a phone, open **http://192.168.4.1**, choose the network shared with the PS5 and save.
 
-```
-GT7-DASH-SETUP
-```
+The two connection paths are separate. Use **DEVICE SETTINGS → CHANGE CONNECTION** when moving between Direct GT7 and SimHub USB.
 
-2. A configuration page should open automatically.
+**RESET TO DEFAULT** clears Wi-Fi, connection, touch, theme and brightness settings, then returns to Touch Setup.
 
-If it doesn't, open:
-
-```
-http://192.168.4.1
-```
-
-3. Select your home Wi-Fi network.
-4. Enter the Wi-Fi password.
-5. Click **Save**.
-6. The dashboard will reboot automatically.
-7. Launch **Gran Turismo 7**.
-
-<p align="center">
-  <img src="photos/002.jpg" width="900" alt="ESP32 GT7 Dashboard">
-</p>
-
-
-The dashboard will automatically discover your PS5 on the local network.
-
-No IP address configuration is required.
+All seven themes work with either source. Missing values show `--` or disable the relevant indicator; game-specific GT7 calculations are not applied to SimHub data.
 
 ### Touch Orientation Setup
 
-If the display looks correct but touch input is rotated, use **TOUCH SETUP** at the
-top of the waiting-for-telemetry screen:
+Touch Setup runs before connection selection on a fresh device or after Reset to Default:
 
-1. Tap **TOUCH SETUP** once; the prompt changes to **TOUCH AGAIN**.
-2. Tap the same physical area again within three seconds.
-3. Tap the target shown on the Touch Setup screen to verify the detected orientation.
-4. Select **SAVE** to store it, or **CANCEL** to keep the previous orientation.
+1. Tap the asymmetric target on the first screen so the firmware can detect orientation.
+2. Tap the verification target.
+3. Select **SAVE**, then choose Direct GT7 or SimHub USB.
 
 An incomplete setup times out without saving, and incoming GT7 telemetry closes the
 setup immediately so it never holds the dashboard open. If an incorrect orientation is
@@ -175,7 +155,7 @@ saved, repeat the same procedure from the waiting screen to replace it.
 - Wake the display when it is asleep; the first tap does not also open Settings.
 - Select and save the Classic, GT3, Retro, Radar, Mono, Pocket, or Endurance dashboard theme.
 - Open **DEVICE SETTINGS** to adjust brightness from 20% to 100% in 10% steps.
-- Reset saved Wi-Fi from Device Settings through a separate confirmation screen.
+- Switch transport under **DEVICE SETTINGS → CHANGE CONNECTION**, or clear all setup with **RESET TO DEFAULT**.
 
 Brightness defaults to 80%, is saved after adjustment, and is restored after reboot or wake. Automatic sleep still turns the backlight fully off.
 
@@ -269,7 +249,7 @@ This project would not have been possible without the following open-source proj
 https://github.com/1achy/https---github.com-1achy-SIMHUB-ESP32---SUNTON-screen
 
 This project originally started as a fork of the SIMHUB ESP32 SUNTON Screen project.
-It has since been substantially rewritten into a standalone GT7 dashboard with direct PS5 telemetry support and no longer depends on SimHub.
+It has since been substantially rewritten with direct PS5 telemetry and shared dashboard themes. GT7 remains standalone; SimHub USB is an optional second telemetry source.
 
 ### gt7-udp
 

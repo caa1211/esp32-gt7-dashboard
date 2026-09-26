@@ -421,6 +421,5 @@ void Command_I2CLCDData() {
 }
 
 void Command_CustomProtocolData() {
-	shCustomProtocol.read();
-	FlowSerialWrite(0x15);
+	shCustomProtocol.read(); // ACK follows the complete custom line, asynchronously.
 }

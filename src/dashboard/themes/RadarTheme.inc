@@ -87,7 +87,7 @@
 		const int brakeApplied = constrain(state.absFilteredLevel.toInt(), 0, 100);
 		const int throttleInput = constrain(state.tcLevel.toInt(), 0, 100);
 		const int throttleApplied = constrain(state.tcFilteredLevel.toInt(), 0, 100);
-		const String cacheState = String(brakeInput) + ":" + String(brakeApplied) +
+		const String cacheState = state.absLevel + ":" + state.tcLevel + ":" + String(brakeInput) + ":" + String(brakeApplied) +
 			":" + String(throttleInput) + ":" + String(throttleApplied);
 		if (!forceUpdate && prevData["radarPedals"] == cacheState) return;
 
@@ -113,6 +113,7 @@
 		{
 			const int y = 2 + row * 12;
 			pedalSprite.drawRect(10, y, 45, 7, frame);
+            if ((row == 0 ? state.absLevel : state.tcLevel) == "--") pedalSprite.drawString("--", 25, y, 1);
 			const int inputWidth = 43 * values[row][0] / 100;
 			const int appliedWidth = 43 * values[row][1] / 100;
 			if (inputWidth > 0)

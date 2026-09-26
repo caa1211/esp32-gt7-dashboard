@@ -235,7 +235,7 @@
 		const int brakeApplied = constrain(state.absFilteredLevel.toInt(), 0, 100);
 		const int throttleInput = constrain(state.tcLevel.toInt(), 0, 100);
 		const int throttleApplied = constrain(state.tcFilteredLevel.toInt(), 0, 100);
-		const String cacheState = String(brakeInput) + ":" +
+		const String cacheState = state.absLevel + ":" + state.tcLevel + ":" + String(brakeInput) + ":" +
 			String(brakeApplied) + ":" + String(throttleInput) + ":" +
 			String(throttleApplied);
 		if (!forceUpdate && prevData["endurancePedals"] == cacheState) return;
@@ -269,7 +269,7 @@
 				pedalSprite.drawString(labels[i], x + 21, 0, 1);
 				pedalSprite.setTextColor(TFT_WHITE, TFT_BLACK);
 				pedalSprite.setTextDatum(MC_DATUM);
-				pedalSprite.drawString(String(input[i]), x + 21, 16, 2);
+				pedalSprite.drawString(((i == 0 ? state.absLevel : state.tcLevel) == "--" ? String("--") : String(input[i])), x + 21, 16, 2);
 				pedalSprite.fillRect(x + 4, 24, 34, 2, tft.color565(38, 40, 40));
 				pedalSprite.fillRect(x + 4, 24,
 					34 * input[i] / 100, 2, dimColors[i]);
@@ -291,7 +291,7 @@
 				tft.drawString(labels[i], x + 21, 150, 1);
 				tft.setTextColor(TFT_WHITE, TFT_BLACK);
 				tft.setTextDatum(MC_DATUM);
-				tft.drawString(String(input[i]), x + 21, 166, 2);
+				tft.drawString(((i == 0 ? state.absLevel : state.tcLevel) == "--" ? String("--") : String(input[i])), x + 21, 166, 2);
 				tft.fillRect(x + 4, 174, 34, 2, tft.color565(38, 40, 40));
 				tft.fillRect(x + 4, 174, 34 * input[i] / 100, 2, dimColors[i]);
 				tft.fillRect(x + 4, 176, 34 * applied[i] / 100, 2, colors[i]);
@@ -468,7 +468,7 @@
 		const int displayedRpm = ((state.engineRpm + 25) / 50) * 50;
 		const uint16_t rpmColor = state.revLimitAlertActive ? red : muted;
 		drawEnduranceValueBuffered(99, 163, 91, 14,
-			String(displayedRpm) + " RPM", "enduranceRpm",
+			(state.engineRpm < 0 ? String("--") : String(displayedRpm)) + " RPM", "enduranceRpm",
 			rpmColor, TFT_BLACK, &fonts::FreeSans9pt7b,
 			MC_DATUM, redraw, rpmSprite, rpmSpriteCreated, 0.61f, 0.62f);
 

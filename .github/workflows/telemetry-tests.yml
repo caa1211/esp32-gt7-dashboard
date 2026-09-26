@@ -1,0 +1,16 @@
+name: Telemetry protocol tests
+on:
+  push:
+    paths: ['src/**', 'simhub/**', 'tests/**', '.github/workflows/telemetry-tests.yml']
+  pull_request:
+    paths: ['src/**', 'simhub/**', 'tests/**', '.github/workflows/telemetry-tests.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: node --test tests/simhub-formula.test.mjs
+      - run: g++ -std=c++11 -Wall -Wextra -pedantic -fsanitize=address,undefined tests/telemetry.cpp -o /tmp/telemetry-tests
+      - run: /tmp/telemetry-tests

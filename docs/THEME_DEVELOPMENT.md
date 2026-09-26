@@ -6,7 +6,7 @@ This guide explains how to add or maintain a dashboard theme without duplicating
 
 The dashboard has three layers:
 
-1. GT7 parsing and derived metrics update the canonical `DashboardState`.
+1. GT7 and SimHub adapters retain independent snapshots; the source selector updates the canonical `DashboardState`. GT7 derived metrics remain specific to GT7.
 2. `renderDashboard()` selects a renderer from the persisted `DashboardTheme` enum.
 3. Each renderer reads the same state and controls presentation only.
 
@@ -44,6 +44,8 @@ Display brightness is stored separately in the same `gt7dash` Preferences namesp
 - throttle/brake input and filtered applied values
 - ABS and TCS state
 - game-running state
+
+All themes support both telemetry sources. Optional SimHub text fields use `--`, missing tyre temperatures use `NAN`, and missing numeric engine RPM uses `-1`. Missing RPM percentage disables the bar/alerts; unsupported aid flags must not activate indicators. See [the protocol contract](TELEMETRY_PROTOCOL.md). Never render an unknown numeric value as a real zero.
 
 If a new telemetry field is genuinely required by every theme, add it to the shared state and populate it in the parser/derived-data layer. Do not obtain it inside one renderer. A theme should not invent unsupported values merely to match a reference image.
 
