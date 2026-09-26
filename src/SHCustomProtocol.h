@@ -13,6 +13,7 @@
 #include <map>
 #include <BleGamepad.h> // libreria bluetooth
 #include <GT7DerivedMetrics.h>
+#include <qrcode.h>
 #include "version.h"
 
 static LGFX tft;
@@ -235,35 +236,53 @@ static void showWifiConnectionFailedScreen()
 static void showWifiSetupScreen()
 {
 	tft.fillScreen(TFT_BLACK);
-
+	tft.setTextPadding(0);
 	tft.setTextDatum(MC_DATUM);
 
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	tft.drawString("WI-FI SETUP", X_CENTER, 18, 4);
+
+	static constexpr uint8_t QR_VERSION = 3;
+	static constexpr int QR_SCALE = 4;
+	static constexpr int QR_QUIET_MODULES = 4;
+	static constexpr int QR_X = 10;
+	static constexpr int QR_Y = 47;
+	uint8_t qrData[128] = {};
+	QRCode qr;
+	if (qrcode_initText(&qr, qrData, QR_VERSION, ECC_LOW,
+		"WIFI:T:nopass;S:GT7-DASH-SETUP;;") == 0)
+	{
+		const int outerSize = (qr.size + QR_QUIET_MODULES * 2) * QR_SCALE;
+		tft.fillRect(QR_X, QR_Y, outerSize, outerSize, TFT_WHITE);
+		for (uint8_t y = 0; y < qr.size; ++y)
+		{
+			for (uint8_t x = 0; x < qr.size; ++x)
+			{
+				if (!qrcode_getModule(&qr, x, y)) continue;
+				tft.fillRect(
+					QR_X + (x + QR_QUIET_MODULES) * QR_SCALE,
+					QR_Y + (y + QR_QUIET_MODULES) * QR_SCALE,
+					QR_SCALE, QR_SCALE, TFT_BLACK);
+			}
+		}
+	}
+
+	tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+	tft.drawString("Scan to join", 235, 53, 2);
+	tft.drawString("or connect manually", 235, 75, 1);
+	tft.drawString("Wi-Fi", 235, 94, 1);
 	tft.setTextColor(TFT_CYAN, TFT_BLACK);
-	tft.setTextSize(2);
-	tft.drawString("WI-FI SETUP", 160, 35);
-
+	tft.drawString("GT7-DASH-SETUP", 235, 116, 2);
+	tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+	tft.drawString("Then open", 235, 143, 1);
 	tft.setTextColor(TFT_WHITE, TFT_BLACK);
-	tft.setTextSize(1.5);
-	tft.drawString("Connect phone to:", 160, 85);
+	tft.drawString("192.168.4.1", 235, 164, 2);
 
-	tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-	tft.setTextSize(2);
-	tft.drawString("GT7-DASH-SETUP", 160, 120);
-
-	tft.setTextColor(TFT_WHITE, TFT_BLACK);
-	tft.setTextSize(1.5);
-	tft.drawString("Open:", 160, 160);
-
-	tft.setTextColor(TFT_GREEN, TFT_BLACK);
-	tft.setTextSize(2);
-	tft.drawString("192.168.4.1", 160, 195);
-
-	tft.setTextColor(TFT_WHITE, TFT_BLACK);
-	tft.setTextSize(1);
+	tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
 	tft.drawCentreString(
 		String("v") + GT7_DASH_VERSION,
-		SCREEN_WIDTH / 2,
-		SCREEN_HEIGHT - 12,
+		X_CENTER,
+		SCREEN_HEIGHT - 14,
 		1);
 }
 

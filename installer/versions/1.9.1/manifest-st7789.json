@@ -1,6 +1,6 @@
 {
-  "name": "ESP32 GT7 Dashboard (ILI9341)",
-  "version": "1.2.5",
+  "name": "ESP32 GT7 Dashboard (ST7789)",
+  "version": "1.9.1",
   "new_install_prompt_erase": true,
   "builds": [
     {
@@ -19,7 +19,7 @@
           "offset": 57344
         },
         {
-          "path": "firmware-ili9341.bin",
+          "path": "firmware-st7789.bin",
           "offset": 65536
         }
       ]
