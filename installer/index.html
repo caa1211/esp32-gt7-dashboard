@@ -280,6 +280,22 @@
         padding: 8px 0 16px;
       }
 
+      .simhub-protocol-link {
+        display: block;
+        width: fit-content;
+        margin: -4px auto 14px;
+        color: #7dd3fc;
+        font-size: 0.88rem;
+        font-weight: 700;
+        text-align: center;
+        text-decoration: none;
+      }
+
+      .simhub-protocol-link:hover {
+        color: #bae6fd;
+        text-decoration: underline;
+      }
+
       .firmware-choice {
         margin: 0 auto 14px;
         max-width: 360px;
@@ -579,6 +595,14 @@
         </esp-web-install-button>
       </div>
 
+      <a
+        class="simhub-protocol-link"
+        id="simhub-protocol-link"
+        href="https://raw.githubusercontent.com/caa1211/esp32-gt7-dashboard/main/simhub/custom-protocol.txt"
+        target="_blank"
+        rel="noopener noreferrer"
+      >Using SimHub? Open Custom Protocol ↗</a>
+
       <p class="compatibility-warning" id="compatibility-warning">
         ⚠️ ESP32-2432S028 only. Installing replaces the firmware currently on the device.
       </p>
@@ -661,6 +685,7 @@
           controllerHelp: "Select the controller fitted to your ESP32-2432S028.",
           connect: "Connect & install",
           unsupported: "Use Chrome, Edge, or another Web Serial browser",
+          simhubProtocol: "Using SimHub? Open Custom Protocol ↗",
           warning: "⚠️ ESP32-2432S028 only. Installing replaces the firmware currently on the device.",
           caption: "Six switchable themes. The same live GT7 telemetry in every layout.",
           complete: "✅ Installation complete",
@@ -696,6 +721,7 @@
           controllerHelp: "請選擇你的 ESP32-2432S028 所使用的顯示控制器。",
           connect: "連接並安裝",
           unsupported: "請使用 Chrome、Edge 或其他支援 Web Serial 的瀏覽器",
+          simhubProtocol: "使用 SimHub？開啟 Custom Protocol ↗",
           warning: "⚠️ 僅適用於 ESP32-2432S028。安裝後會取代裝置目前的韌體。",
           caption: "六種可切換主題，每種版面都顯示相同的即時 GT7 遙測資料。",
           complete: "✅ 安裝完成",
@@ -731,6 +757,7 @@
         document.getElementById("controller-help").textContent = text.controllerHelp;
         document.getElementById("connect-button").textContent = text.connect;
         document.getElementById("unsupported-button").textContent = text.unsupported;
+        document.getElementById("simhub-protocol-link").textContent = text.simhubProtocol;
         document.getElementById("compatibility-warning").textContent = text.warning;
         document.getElementById("theme-caption").textContent = text.caption;
 
