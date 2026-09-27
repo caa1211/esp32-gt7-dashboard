@@ -65,7 +65,7 @@ int main() {
     selector.simhub.running = false; selector.gt7.running = true;
     assert(selector.update(400) == TelemetrySource::GT7);
     selector.gt7.running = false;
-    selector.gt7.time = 4099;
+    selector.gt7.time = 100;
     assert(selector.update(4099) == TelemetrySource::GT7); // idle source stays selected without replacement
     assert(selector.update(4100) == TelemetrySource::None); // both sources expired
     selector.gt7.running = true;
