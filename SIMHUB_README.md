@@ -12,9 +12,18 @@ The dashboard supports **Direct GT7** over Wi-Fi and **SimHub USB** for PC games
 
 1. Open SimHub and go to **Arduino**.
 2. Open the **Multiple Arduino** or **Multiple USB** devices page. The label varies slightly between SimHub versions; use this page even when only one dashboard is connected.
+
+<img src="photos/simhub/00.png" alt="Open Arduino and select Multiple Arduino in SimHub" width="900">
+
+*Open Arduino, then select Multiple Arduino so SimHub can scan the dashboard.*
+
 3. Enable Arduino support so SimHub scans the USB devices.
 4. Find the dashboard's COM port, then add or enable that device. Its firmware identification is `GT7 SimHub Dash`.
 5. Wait for SimHub to show the device as connected. Detecting the COM port only confirms the USB connection; telemetry requires the Custom Protocol in the next section.
+
+<img src="photos/simhub/01.png" alt="GT7 SimHub Dash identified and connected in SimHub" width="900">
+
+*Confirm that SimHub identifies `GT7 SimHub Dash`, enables the correct COM port, and shows the device as connected.*
 
 The initial connection uses 19200 baud and SimHub negotiates the later rate automatically. No virtual COM port, TCP bridge, or extra plugin is required.
 
@@ -22,7 +31,17 @@ The initial connection uses 19200 baud and SimHub negotiates the later rate auto
 
 1. Open **Custom Protocol** or its formula editor for the Arduino device you just added.
 2. Enable **Use JavaScript**.
+
+<img src="photos/simhub/02.png" alt="Select Use JavaScript for the SimHub Custom Protocol" width="900">
+
+*Choose **Use JavaScript** when SimHub asks how to bind the protocol message.*
+
 3. Open [simhub/custom-protocol.txt](simhub/custom-protocol.txt), copy its **entire contents**, and paste them into the formula field.
+
+<img src="photos/simhub/03.png" alt="Copy the repository Custom Protocol and paste it into the SimHub JavaScript formula field" width="900">
+
+*Open the repository protocol file, copy all of it, paste it into the JavaScript field, then select **OK**.*
+
 4. Select Apply or Save and verify that the protocol is enabled for the correct COM device.
 5. Do not append `\n`; SimHub adds the line ending automatically.
 

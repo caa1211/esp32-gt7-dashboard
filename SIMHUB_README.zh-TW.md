@@ -12,9 +12,18 @@
 
 1. 開啟 SimHub，進入 **Arduino** 頁面。
 2. 打開 **Multiple Arduino**／**Multiple USB** 裝置頁面。不同 SimHub 版本的名稱可能略有差異；即使只有一台儀表，也使用多裝置頁面。
+
+<img src="photos/simhub/00.png" alt="在 SimHub 開啟 Arduino 並選擇多個 Arduino" width="900">
+
+*進入 Arduino 頁面並選擇多個 Arduino，讓 SimHub 開始掃描儀表。*
+
 3. 啟用 Arduino 功能，讓 SimHub 掃描 USB 裝置。
 4. 找到儀表所在的 COM 埠，並加入或啟用該裝置。韌體識別名稱為 `GT7 SimHub Dash`。
 5. 等待 SimHub 顯示裝置已連線。看到 COM 埠只代表 USB 已偵測到；還要完成下一段 Custom Protocol 設定才會有遙測資料。
+
+<img src="photos/simhub/01.png" alt="SimHub 已識別並連線 GT7 SimHub Dash" width="900">
+
+*確認 SimHub 已識別 `GT7 SimHub Dash`、啟用正確的 COM 埠，並顯示裝置已連線。*
 
 初始連線速度為 19200 baud，之後由 SimHub 自動協商，不需要手動建立虛擬 COM、TCP 連線或安裝額外外掛。
 
@@ -22,7 +31,17 @@
 
 1. 在剛加入的 Arduino 裝置中，找到 **Custom Protocol** 設定或公式編輯器。
 2. 啟用 **Use JavaScript**。
+
+<img src="photos/simhub/02.png" alt="在 SimHub Custom Protocol 選擇使用 JavaScript" width="900">
+
+*SimHub 詢問 Protocol message 綁定方式時，選擇 **Use JavaScript**。*
+
 3. 開啟 [simhub/custom-protocol.txt](simhub/custom-protocol.txt)，複製檔案的**全部內容**並貼入公式欄位。
+
+<img src="photos/simhub/03.png" alt="從 Repo 複製 Custom Protocol 並貼入 SimHub JavaScript 公式欄位" width="900">
+
+*開啟 Repo 中的 protocol 檔案、複製全部內容、貼入 JavaScript 欄位，最後按下 **OK**。*
+
 4. 按下 Apply／Save，並確認 Custom Protocol 已啟用在正確的 COM 裝置上。
 
 公式編輯器的 **Raw result** 應以 `DSH1;` 開頭，而且第二欄序號會持續增加，例如 `DSH1;391;...`。這表示公式正在執行，但仍需確認資料送往正確的 Arduino 裝置與 COM 埠。
