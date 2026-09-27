@@ -1,6 +1,6 @@
 // Paste into the Arduino Custom Protocol formula with "Use JavaScript" enabled.
 // One formula serves every dashboard theme. Do not append a newline yourself.
-// Revision: DSH1-20260927.2 (calculated fuel percent + shift neutral filter)
+// Revision: DSH1-20260927.5 (prefer live FuelPercent alias; gear filtering is in firmware)
 function prop(name) {
     try { return $prop(name); } catch (e) { return null; }
 }
@@ -38,15 +38,6 @@ gear = gear === null ? '--' : String(gear).toUpperCase();
 if (gear === '-1') gear = 'R';
 if (gear === '0') gear = 'N';
 if (!/^(N|R|[1-9])$/.test(gear)) gear = '--';
-// Some games briefly report neutral between two gears. Keep the previous
-// valid gear through a normal shift, but still allow a sustained neutral.
-if (gear === 'N' && root.dashLastGear && root.dashLastGear !== 'N') {
-    root.dashNeutralFrames = (root.dashNeutralFrames || 0) + 1;
-    if (root.dashNeutralFrames <= 8) gear = root.dashLastGear;
-} else {
-    root.dashNeutralFrames = 0;
-}
-if (gear !== '--') root.dashLastGear = gear;
 var fuelRaw = data('Fuel');
 var fuel = Number(fuelRaw);
 var fuelCapacityRaw = first([
@@ -57,7 +48,13 @@ var fuelCapacityRaw = first([
     'FuelCapacity', 'MaxFuel'
 ]);
 var fuelCapacity = Number(fuelCapacityRaw);
-var fuelPercentRaw = data('FuelPercent');
+// SimHub's short FuelPercent alias is the live, normalized value used by its
+// own Custom Protocol examples. Some games leave the full GameData copy stale.
+var fuelPercentRaw = first([
+    'FuelPercent',
+    'DataCorePlugin.GameData.NewData.FuelPercent',
+    'DataCorePlugin.GameData.FuelPercent'
+]);
 var calculatedFuelPercent = fuelRaw !== null && fuelCapacityRaw !== null &&
     isFinite(fuel) && isFinite(fuelCapacity) && fuelCapacity > 0
     ? fuel / fuelCapacity * 100 : null;

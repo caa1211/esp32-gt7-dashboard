@@ -40,8 +40,8 @@ If SimHub detects the device but the dashboard remains on Waiting:
 - **Check Custom Protocol (DSH1)**: the formula has the wrong format or version. Paste [simhub/custom-protocol.txt](simhub/custom-protocol.txt) again.
 - **Waiting for SimHub** remains: verify the data cable, selected COM port, serial-port ownership, and that SimHub is receiving live game data.
 - Individual values show `--`: the current game may not expose those properties; other supported values still work.
-- Fuel never changes: paste the latest [simhub/custom-protocol.txt](simhub/custom-protocol.txt) again. The current formula prioritizes the active game's full FuelPercent property and falls back to Fuel divided by FuelCapacity.
-- A brief neutral value during a gear change is filtered for eight formula updates. A sustained or initial neutral still displays `N`.
+- Fuel never changes: paste the latest [simhub/custom-protocol.txt](simhub/custom-protocol.txt) again. The formula prefers SimHub's live `FuelPercent` alias and calculates from fuel capacity when available.
+- The firmware filters a brief neutral value during a gear change for 750 ms. A sustained or initial neutral still displays `N`.
 
 ## Notes
 

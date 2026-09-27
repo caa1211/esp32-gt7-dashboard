@@ -10,6 +10,39 @@ namespace SimHubProtocol {
 // invalidLap;temperatureFL;FR;RL;RR
 static constexpr unsigned fieldCount = 25;
 static constexpr unsigned maxLength = 384;
+static constexpr uint32_t neutralHoldMs = 750;
+
+class GearFilter {
+public:
+    const char *apply(const char *gear, uint32_t now) {
+        if (!gear || strcmp(gear, "--") == 0) {
+            neutralPending = false;
+            return "--";
+        }
+        if (strcmp(gear, "N") == 0 && haveGear && strcmp(lastGear, "N") != 0) {
+            if (!neutralPending) {
+                neutralPending = true;
+                neutralStarted = now;
+            }
+            if (uint32_t(now - neutralStarted) < neutralHoldMs) return lastGear;
+        } else {
+            neutralPending = false;
+        }
+        lastGear[0] = gear[0];
+        lastGear[1] = 0;
+        haveGear = true;
+        return lastGear;
+    }
+    void reset() {
+        lastGear[0] = 'N'; lastGear[1] = 0;
+        haveGear = false; neutralPending = false; neutralStarted = 0;
+    }
+private:
+    char lastGear[2] = {'N', 0};
+    bool haveGear = false, neutralPending = false;
+    uint32_t neutralStarted = 0;
+};
+
 struct Frame {
     char *fields[fieldCount];
     double values[fieldCount];

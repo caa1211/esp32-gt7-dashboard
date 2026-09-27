@@ -40,8 +40,8 @@
 - **Check Custom Protocol (DSH1)**：公式格式或版本不正確。重新貼入 [simhub/custom-protocol.txt](simhub/custom-protocol.txt)。
 - 一直顯示 **Waiting for SimHub**：確認使用資料線、選對 COM 埠、沒有其他程式占用序列埠，而且 SimHub 正在收到遊戲資料。
 - 個別欄位顯示 `--`：該遊戲可能沒有提供對應屬性；其他支援欄位仍可正常使用。
-- 油量一直不變：重新貼入最新版 [simhub/custom-protocol.txt](simhub/custom-protocol.txt)。目前公式會優先讀取遊戲的完整 FuelPercent 屬性，沒有時才用 Fuel 除以 FuelCapacity 計算。
-- 換檔瞬間出現的空檔值會過濾八筆；持續保持空檔或啟動時就在空檔，仍會正常顯示 `N`。
+- 油量一直不變：重新貼入最新版 [simhub/custom-protocol.txt](simhub/custom-protocol.txt)。公式會優先使用 SimHub 的即時 `FuelPercent`，有油箱容量時則直接計算。
+- 韌體會過濾換檔時 750 ms 內短暫出現的空檔值；持續保持空檔或啟動時就在空檔，仍會正常顯示 `N`。
 
 ## 注意事項
 

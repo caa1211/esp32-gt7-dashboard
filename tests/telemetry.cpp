@@ -39,6 +39,17 @@ int main() {
     assert(parse(replaceField(valid, 4, "R")));
     assert(parse(replaceField(valid, 1, "4294967295")));
 
+    SimHubProtocol::GearFilter gearFilter;
+    assert(std::string(gearFilter.apply("3", 100)) == "3");
+    assert(std::string(gearFilter.apply("N", 150)) == "3");
+    assert(std::string(gearFilter.apply("N", 849)) == "3");
+    assert(std::string(gearFilter.apply("4", 850)) == "4");
+    assert(std::string(gearFilter.apply("N", 900)) == "4");
+    assert(std::string(gearFilter.apply("N", 1650)) == "N");
+    gearFilter.reset();
+    assert(std::string(gearFilter.apply("N", 2000)) == "N");
+    assert(std::string(gearFilter.apply("--", 2100)) == "--");
+
     TelemetrySelector selector;
     assert(selector.update(0) == TelemetrySource::None);
     selector.simhub.received = true; selector.simhub.time = 100;

@@ -248,12 +248,16 @@ private:
     bool wifiStopRequested = false, wifiPortalActive = false;
     bool touchSetupRequired = false;
     bool connectionChoiceCanCancel = false;
+    bool gt7SelectionPending = false;
+    bool pendingSelectionWasFirstRun = false;
+    TelemetryMode modeBeforePendingGT7 = TelemetryMode::Auto;
     String networkStatus = "Wi-Fi not configured";
     bool receivingCustom = false, customOverflow = false, customProtocolError = false;
     char customLine[SimHubProtocol::maxLength] = {};
     unsigned customLength = 0;
     uint32_t customStarted = 0, customLastByte = 0, lastSimHubSequence = 0;
     bool haveSimHubSequence = false, usbSeen = false;
+    SimHubProtocol::GearFilter simHubGearFilter;
     uint32_t lastUsbCommandTime = 0, settingsStatusRefresh = 0;
     Preferences dashboardPreferences;
 	DashboardTheme activeDashboardTheme = DashboardTheme::GT3;
@@ -278,6 +282,7 @@ private:
 	TouchRotation touchRotation = TouchRotation::Deg0;
 	TouchRotation pendingTouchRotation = TouchRotation::Deg0;
 	bool touchCalibrationVerified = false;
+	uint32_t touchCalibrationReadyAt = 0;
 	uint16_t originalTouchX = 0;
 	uint16_t originalTouchY = 0;
 
@@ -308,7 +313,7 @@ private:
 	bool screenOffByUser = false;
 
 	// Tap the active dashboard to open the touch-driven Settings menu.
-	enum class SettingsScreen : uint8_t
+    enum class SettingsScreen : uint8_t
 	{
 		Closed,
 		Main,
@@ -323,6 +328,7 @@ private:
 
 	static constexpr unsigned long SETTINGS_TIMEOUT_MS = 15000UL;
 	SettingsScreen settingsScreen = SettingsScreen::Closed;
+	SettingsScreen wifiReturnScreen = SettingsScreen::ConnectionChoice;
 	unsigned long settingsLastInteractionTime = 0;
 	int settingsPressedButton = -1;
 	bool wifiResetConfirmOpen = false;
@@ -969,7 +975,10 @@ public:
         // in flash, so a false status must not erase our cached result.
         if (telemetry.mode == TelemetryMode::GT7 || configured)
             wifiConfigured = configured;
-        if (connected && settingsScreen == SettingsScreen::WifiSettings) closeSettings();
+        if (connected && settingsScreen == SettingsScreen::WifiSettings) {
+            if (gt7SelectionPending) selectConnection(TelemetryMode::GT7);
+            else closeSettings();
+        }
         if (networkStatus != status || wifiPortalActive != portal) {
             networkStatus = status; wifiPortalActive = portal; connectingScreenActive = false;
         }
@@ -999,8 +1008,10 @@ public:
     }
     void setGT7TransportReady(bool ready) { gt7TransportReady = ready; }
     void selectConnection(TelemetryMode mode) {
+        gt7SelectionPending = false;
         telemetry.mode = mode;
         telemetry.active = TelemetrySource::None;
+        simHubGearFilter.reset();
         firstRun = false;
         if (dashboardPreferencesReady)
             dashboardPreferences.putUChar("connection", static_cast<uint8_t>(mode));
@@ -1010,6 +1021,33 @@ public:
         if (mode == TelemetryMode::GT7 && !wifiConfigured)
             showSettingsScreen(SettingsScreen::WifiSettings);
         else closeSettings();
+    }
+    void requestConnection(TelemetryMode mode, SettingsScreen returnScreen) {
+        if (mode != TelemetryMode::GT7 || wifiConfigured) {
+            selectConnection(mode); return;
+        }
+        gt7SelectionPending = true;
+        pendingSelectionWasFirstRun = firstRun;
+        modeBeforePendingGT7 = telemetry.mode;
+        wifiReturnScreen = returnScreen;
+        telemetry.mode = TelemetryMode::GT7;
+        telemetry.active = TelemetrySource::None;
+        networkChanged = true;
+        connectingScreenActive = false;
+        forceUpdate = true;
+        showSettingsScreen(SettingsScreen::WifiSettings);
+    }
+    void cancelPendingGT7() {
+        if (!gt7SelectionPending) {
+            showSettingsScreen(firstRun ? SettingsScreen::ConnectionChoice : SettingsScreen::DeviceSettings);
+            return;
+        }
+        telemetry.mode = modeBeforePendingGT7;
+        firstRun = pendingSelectionWasFirstRun;
+        gt7SelectionPending = false;
+        wifiStopRequested = true;
+        networkChanged = true;
+        showSettingsScreen(wifiReturnScreen);
     }
     void noteUsbCommand() { if (!usbSeen) connectingScreenActive = false; usbSeen = true; lastUsbCommandTime = millis(); }
     bool customReadPending() const { return receivingCustom; }
@@ -1046,12 +1084,20 @@ public:
         const uint32_t sequence = static_cast<uint32_t>(frame.values[1]);
         if (haveSimHubSequence && sequence == lastSimHubSequence) return true;
         lastSimHubSequence = sequence; haveSimHubSequence = true;
-        if (firstRun || telemetry.mode != TelemetryMode::SimHub) return true;
+        // Legacy releases stored Auto (0). Continue accepting SimHub frames in
+        // that mode so upgrading does not leave the dashboard waiting forever.
+        if (firstRun || telemetry.mode == TelemetryMode::GT7) return true;
         DashboardState next;
         const auto text = [&](unsigned i) { return String(frame.fields[i]); };
         const auto integer = [&](unsigned i) { return isfinite(frame.values[i]) ? static_cast<int>(lround(frame.values[i])) : 0; };
-        next.gameRunning = frame.values[2] == 1 ? "True" : "False";
-        next.speed = isfinite(frame.values[3]) ? String(integer(3)) : "--"; next.gear = text(4);
+        // GameRunning is false for some SimHub game plugins even while their
+        // live telemetry is moving. Speed or RPM is sufficient evidence here.
+        const bool simHubRunning = frame.values[2] == 1 ||
+            (isfinite(frame.values[3]) && frame.values[3] > 0) ||
+            (isfinite(frame.values[5]) && frame.values[5] > 0);
+        next.gameRunning = simHubRunning ? "True" : "False";
+        next.speed = isfinite(frame.values[3]) ? String(integer(3)) : "--";
+        next.gear = simHubGearFilter.apply(frame.fields[4], millis());
         next.engineRpm = isfinite(frame.values[5]) ? integer(5) : -1;
         next.rpmPercent = integer(6); next.rpmRedLineSetting = isfinite(frame.values[7]) ? integer(7) : 90;
         next.rpmAlertRangeValid = isfinite(frame.values[6]) && isfinite(frame.values[7]) && frame.values[7] > 0;
@@ -1069,7 +1115,7 @@ public:
         next.tcActive = text(18); next.absActive = text(19); next.lapInvalidated = frame.values[20] == 1 ? "True" : frame.values[20] == 0 ? "False" : "--";
         for (unsigned i = 0; i < 4; ++i) next.tyreTemperatures[i] = frame.values[21 + i];
         simhubState = next; simhubDirty = true;
-        telemetry.simhub.received = true; telemetry.simhub.time = millis(); telemetry.simhub.running = frame.values[2] == 1;
+        telemetry.simhub.received = true; telemetry.simhub.time = millis(); telemetry.simhub.running = simHubRunning;
         return true;
     }
     void applyTelemetryState(const DashboardState &next) {
@@ -1562,7 +1608,7 @@ public:
 
 	void drawDeviceBrightnessValue()
 	{
-		drawSettingsButton(88, 58, 144, 42,
+		drawSettingsButton(80, 50, 160, 38,
 			String("BRIGHTNESS  ") + userBrightnessPercent + "%", false);
 	}
 
@@ -1668,21 +1714,20 @@ public:
 
 		tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
 		tft.drawString(
-			touchCalibrationVerified ? "Touch verified" : "Tap the target to verify",
+			touchCalibrationVerified ? "Touch verified" : "Tap the left target to verify",
 			X_CENTER, 59, 2);
 
 		const uint16_t targetColor = touchCalibrationVerified
 			? tft.color565(88, 190, 130)
 			: tft.color565(210, 82, 126);
-		tft.drawCircle(252, 104, 15, targetColor);
-		tft.drawCircle(252, 104, 7, targetColor);
-		tft.drawFastHLine(232, 104, 41, targetColor);
-		tft.drawFastVLine(252, 84, 41, targetColor);
+		tft.drawCircle(68, 104, 15, targetColor);
+		tft.drawCircle(68, 104, 7, targetColor);
+		tft.drawFastHLine(48, 104, 41, targetColor);
+		tft.drawFastVLine(68, 84, 41, targetColor);
 
-		if (!touchSetupRequired)
-			drawSettingsButton(25, 169, 125, 50, "CANCEL", pressedButton == 1);
-		drawSettingsButton(touchSetupRequired ? 80 : 170, 169,
-			touchSetupRequired ? 160 : 125, 50, "SAVE", pressedButton == 2,
+		drawSettingsButton(25, 169, 125, 50,
+			touchSetupRequired ? "RETRY" : "CANCEL", pressedButton == 1);
+		drawSettingsButton(170, 169, 125, 50, "SAVE", pressedButton == 2,
 			touchCalibrationVerified);
 		tft.setTextDatum(TL_DATUM);
 	}
@@ -1748,6 +1793,10 @@ public:
             drawSettingsButton(25, 132, 270, 58, "SIMHUB USB", pressedButton == 1);
             if (connectionChoiceCanCancel)
                 drawSettingsButton(105, 202, 110, 30, "BACK", pressedButton == 2);
+            else {
+                tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+                tft.drawString("You can change this later in Settings", X_CENTER, 218, 1);
+            }
         }
         else if (settingsScreen == SettingsScreen::WifiSettings) {
             tft.setTextColor(TFT_WHITE, TFT_BLACK); tft.drawString("WI-FI SETUP", X_CENTER, 18, 4);
@@ -1762,8 +1811,7 @@ public:
             tft.drawString("Then open", 235, 143, 1);
             tft.setTextColor(TFT_WHITE, TFT_BLACK);
             tft.drawString("192.168.4.1", 235, 164, 2);
-            tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-            tft.drawString("Direct GT7 requires Wi-Fi", X_CENTER, 218, 1);
+            drawSettingsButton(105, 204, 110, 28, "BACK", pressedButton == 0);
         }
 		else if (settingsScreen == SettingsScreen::ThemeSelection)
 		{
@@ -1773,12 +1821,17 @@ public:
 		{
 			tft.setTextColor(TFT_WHITE, TFT_BLACK);
 			tft.drawString("DEVICE SETTINGS", X_CENTER, 20, 4);
-			drawSettingsButton(30, 58, 52, 42, "-", pressedButton == 0);
+			drawSettingsButton(20, 50, 50, 38, "-", pressedButton == 0);
 			drawDeviceBrightnessValue();
-			drawSettingsButton(238, 58, 52, 42, "+", pressedButton == 1);
-			drawSettingsButton(30, 106, 260, 42, "CHANGE CONNECTION", pressedButton == 2);
-			drawSettingsButton(30, 154, 260, 42, "RESET TO DEFAULT", pressedButton == 3, false, true);
-			drawSettingsButton(105, 204, 110, 28, "BACK", pressedButton == 4);
+			drawSettingsButton(250, 50, 50, 38, "+", pressedButton == 1);
+			tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+			tft.drawString("CONNECTION", X_CENTER, 101, 1);
+			drawSettingsButton(20, 111, 135, 38, "DIRECT GT7", pressedButton == 2,
+				telemetry.mode == TelemetryMode::GT7);
+			drawSettingsButton(165, 111, 135, 38, "SIMHUB USB", pressedButton == 3,
+				telemetry.mode == TelemetryMode::SimHub);
+			drawSettingsButton(20, 158, 280, 38, "RESET TO DEFAULT", pressedButton == 4, false, true);
+			drawSettingsButton(20, 204, 280, 28, "BACK", pressedButton == 5);
 		}
 		else if (settingsScreen == SettingsScreen::ResetConfirmation)
 		{
@@ -1806,7 +1859,7 @@ public:
             drawSettingsScreen(pressed ? button : -1); return;
         }
         if (settingsScreen == SettingsScreen::WifiSettings) {
-            drawSettingsScreen(pressed ? button : -1); return;
+            drawSettingsButton(105, 204, 110, 28, "BACK", pressed); return;
         }
 		if (settingsScreen == SettingsScreen::Main)
 		{
@@ -1825,15 +1878,19 @@ public:
 		else if (settingsScreen == SettingsScreen::DeviceSettings)
 		{
 			if (button == 0)
-				drawSettingsButton(30, 58, 52, 42, "-", pressed);
+				drawSettingsButton(20, 50, 50, 38, "-", pressed);
 			else if (button == 1)
-				drawSettingsButton(238, 58, 52, 42, "+", pressed);
+				drawSettingsButton(250, 50, 50, 38, "+", pressed);
 			else if (button == 2)
-				drawSettingsButton(30, 106, 260, 42, "CHANGE CONNECTION", pressed);
+				drawSettingsButton(20, 111, 135, 38, "DIRECT GT7", pressed,
+					telemetry.mode == TelemetryMode::GT7);
 			else if (button == 3)
-				drawSettingsButton(30, 154, 260, 42, "RESET TO DEFAULT", pressed, false, true);
+				drawSettingsButton(165, 111, 135, 38, "SIMHUB USB", pressed,
+					telemetry.mode == TelemetryMode::SimHub);
 			else if (button == 4)
-				drawSettingsButton(105, 204, 110, 28, "BACK", pressed);
+				drawSettingsButton(20, 158, 280, 38, "RESET TO DEFAULT", pressed, false, true);
+			else if (button == 5)
+				drawSettingsButton(20, 204, 280, 28, "BACK", pressed);
 		}
 		else if (settingsScreen == SettingsScreen::ResetConfirmation)
 		{
@@ -1845,11 +1902,11 @@ public:
 		}
 		else if (settingsScreen == SettingsScreen::TouchCalibration)
 		{
-			if (button == 1 && !touchSetupRequired)
-				drawSettingsButton(25, 169, 125, 50, "CANCEL", pressed);
+			if (button == 1)
+				drawSettingsButton(25, 169, 125, 50,
+					touchSetupRequired ? "RETRY" : "CANCEL", pressed);
 			else if (button == 2)
-				drawSettingsButton(touchSetupRequired ? 80 : 170, 169,
-					touchSetupRequired ? 160 : 125, 50, "SAVE", pressed,
+				drawSettingsButton(170, 169, 125, 50, "SAVE", pressed,
 					touchCalibrationVerified);
 		}
 		tft.setTextDatum(TL_DATUM);
@@ -1894,6 +1951,7 @@ public:
 	{
 		pendingTouchRotation = candidate;
 		touchCalibrationVerified = false;
+		touchCalibrationReadyAt = millis() + 400;
 		showSettingsScreen(SettingsScreen::TouchCalibration);
 	}
 
@@ -1978,6 +2036,7 @@ public:
             return -1;
         }
         if (settingsScreen == SettingsScreen::WifiSettings) {
+            if (touchInside(105, 204, 110, 28)) return 0;
             return -1;
         }
 		if (settingsScreen == SettingsScreen::Main)
@@ -1998,11 +2057,12 @@ public:
 		}
 		else if (settingsScreen == SettingsScreen::DeviceSettings)
 		{
-			if (touchInside(30, 58, 52, 42)) return 0;
-			if (touchInside(238, 58, 52, 42)) return 1;
-			if (touchInside(30, 106, 260, 42)) return 2;
-			if (touchInside(30, 154, 260, 42)) return 3;
-			if (touchInside(105, 204, 110, 28)) return 4;
+			if (touchInside(20, 50, 50, 38)) return 0;
+			if (touchInside(250, 50, 50, 38)) return 1;
+			if (touchInside(20, 111, 135, 38)) return 2;
+			if (touchInside(165, 111, 135, 38)) return 3;
+			if (touchInside(20, 158, 280, 38)) return 4;
+			if (touchInside(20, 204, 280, 28)) return 5;
 		}
 		else if (settingsScreen == SettingsScreen::ResetConfirmation)
 		{
@@ -2011,13 +2071,13 @@ public:
 		}
 		else if (settingsScreen == SettingsScreen::TouchCalibration)
 		{
-			if (touchInside(224, 76, 56, 56)) return 0;
+			if (int32_t(millis() - touchCalibrationReadyAt) >= 0 &&
+				touchInside(40, 76, 56, 56)) return 0;
 			const bool originalCancel =
 				originalTouchX >= 25 && originalTouchX < 150 &&
 				originalTouchY >= 169 && originalTouchY < 219;
-			if (!touchSetupRequired && (touchInside(25, 169, 125, 50) || originalCancel)) return 1;
-			if (touchCalibrationVerified && touchInside(touchSetupRequired ? 80 : 170,
-				169, touchSetupRequired ? 160 : 125, 50)) return 2;
+			if (touchInside(25, 169, 125, 50) || originalCancel) return 1;
+			if (touchCalibrationVerified && touchInside(170, 169, 125, 50)) return 2;
 		}
 		return -1;
 	}
@@ -2026,9 +2086,13 @@ public:
 	{
 		if (settingsScreen == SettingsScreen::ConnectionChoice)
 		{
-			if (button == 0) selectConnection(TelemetryMode::GT7);
+			if (button == 0) requestConnection(TelemetryMode::GT7, SettingsScreen::ConnectionChoice);
 			else if (button == 1) selectConnection(TelemetryMode::SimHub);
 			else if (button == 2 && connectionChoiceCanCancel) closeSettings();
+		}
+		else if (settingsScreen == SettingsScreen::WifiSettings)
+		{
+			if (button == 0) cancelPendingGT7();
 		}
 		else if (settingsScreen == SettingsScreen::Main)
 		{
@@ -2096,12 +2160,10 @@ public:
 				drawDeviceBrightnessValue();
 			}
 			else if (button == 2)
-			{
-				connectionChoiceCanCancel = true;
-				showSettingsScreen(SettingsScreen::ConnectionChoice);
-			}
-			else if (button == 3) showWifiResetConfirm();
-			else if (button == 4) showSettingsScreen(SettingsScreen::Main);
+				requestConnection(TelemetryMode::GT7, SettingsScreen::DeviceSettings);
+			else if (button == 3) selectConnection(TelemetryMode::SimHub);
+			else if (button == 4) showWifiResetConfirm();
+			else if (button == 5) showSettingsScreen(SettingsScreen::Main);
 		}
         else if (settingsScreen == SettingsScreen::ResetConfirmation) {
             if (button == 1) {
@@ -2111,6 +2173,7 @@ public:
                 touchRotation = pendingTouchRotation = TouchRotation::Deg0;
                 touchSetupRequired = true;
                 connectionChoiceCanCancel = false;
+                gt7SelectionPending = false;
                 telemetry.mode = TelemetryMode::Auto;
                 telemetry.active = TelemetrySource::None;
                 firstRun = true;
@@ -2131,7 +2194,11 @@ public:
 			}
 			else if (button == 1)
 			{
-				if (!touchSetupRequired) closeSettings();
+				if (touchSetupRequired) {
+					pendingTouchRotation = touchRotation;
+					touchCalibrationVerified = false;
+					showSettingsScreen(SettingsScreen::InitialTouch);
+				} else closeSettings();
 			}
 			else if (button == 2 && touchCalibrationVerified)
 			{

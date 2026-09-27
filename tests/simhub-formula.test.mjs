@@ -61,10 +61,10 @@ test('GameData properties used by the historical configuration remain supported'
     'DataCorePlugin.GameData.Throttle': 50 });
   assert.equal(result[13], '3'); assert.equal(result[14], '10'); assert.equal(result[16], '50');
 });
-test('live game fuel percent overrides a stale short alias when capacity is unavailable', () => {
+test('live short fuel percent overrides a stale full property when capacity is unavailable', () => {
   const result = run({ FuelPercent: 47,
     'DataCorePlugin.GameData.NewData.FuelPercent': 72 });
-  assert.equal(result[15], '72');
+  assert.equal(result[15], '47');
 });
 test('fuel percent falls back to fuel divided by tank capacity', () => {
   const result = run({ Fuel: 30, FuelCapacity: 60 });
@@ -75,16 +75,6 @@ test('calculated fuel percent overrides a stale reported percentage', () => {
     'DataCorePlugin.GameData.NewData.FuelPercent': 47 });
   assert.equal(result[15], '40');
 });
-test('brief neutral reports between gears do not flicker the dashboard', () => {
-  const root = {};
-  assert.equal(run({ Gear: 3 }, root)[4], '3');
-  for (let i = 0; i < 8; i++) assert.equal(run({ Gear: 0 }, root)[4], '3');
-  assert.equal(run({ Gear: 4 }, root)[4], '4');
-});
-test('a sustained or initial neutral still displays as neutral', () => {
-  const root = {};
-  assert.equal(run({ Gear: 0 }, root)[4], 'N');
-  assert.equal(run({ Gear: 2 }, root)[4], '2');
-  for (let i = 0; i < 8; i++) assert.equal(run({ Gear: 0 }, root)[4], '2');
-  assert.equal(run({ Gear: 0 }, root)[4], 'N');
+test('formula forwards neutral for the firmware gear filter', () => {
+  assert.equal(run({ Gear: 0 })[4], 'N');
 });
