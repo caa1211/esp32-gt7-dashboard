@@ -92,7 +92,7 @@
   <img src="photos/theme_all.jpg" width="900" alt="Classic、GT3、Radar 與 Retro 四種儀表主題預覽">
 </p>
 
-螢幕亮起時點一下，選擇 **SELECT THEME**，再選取需要的主題。主題會以固定 enum 值儲存並在重新開機後恢復；重設 Wi-Fi 不會清除主題或亮度設定。
+螢幕亮起時點一下，選擇 **SELECT THEME**，再選取需要的主題。主題會以固定 enum 值儲存並在重新開機後恢復；切換 telemetry 連線不會清除主題或亮度設定。
 
 ---
 
@@ -127,7 +127,7 @@
 - **SIMHUB USB：** 只啟用 USB Custom Protocol，Wi-Fi 保持關閉。
 - **GT7：** 沒有網路或已儲存網路連線失敗時提供配網，依下方步驟設定。
 
-兩條連線路徑彼此獨立。需要更換平台時，使用 **DEVICE SETTINGS → CHANGE CONNECTION**。
+兩條連線路徑彼此獨立。可直接在 Waiting 畫面切換，或在 **DEVICE SETTINGS** 選擇 **DIRECT GT7**／**SIMHUB USB**。
 
 七個主題共用兩種來源，缺值顯示 `--` 或停用對應提示。GT7 專用推算不會套用到 SimHub。
 
@@ -161,14 +161,12 @@ http://192.168.4.1
 
 ### 觸控方向設定
 
-如果畫面顯示正常，但觸控方向旋轉了，可在等待遙測畫面上方使用 **TOUCH SETUP**：
+全新裝置或執行 **RESET TO DEFAULT** 後會先進入 Touch Setup：
 
-1. 點一下 **TOUCH SETUP**，提示會變成 **TOUCH AGAIN**。
-2. 在三秒內再次點擊相同的實體位置。
-3. 進入 Touch Setup 後，點擊畫面上的測試靶以確認偵測到的方向。
-4. 點擊 **SAVE** 儲存，或點擊 **CANCEL** 保留原本方向。
-
-未完成的設定會逾時退出且不會儲存；收到 GT7 遙測資料時也會立即退出，不會卡住儀表畫面。如果誤存錯誤方向，只要回到等待畫面再次執行相同步驟即可覆蓋。
+1. 點擊右側目標，讓韌體判斷觸控方向。
+2. 點擊左側驗證目標；目標位置不同，可避免快速連點造成誤判。
+3. 方向正確時點擊 **SAVE**，判斷錯誤則點擊 **RETRY** 回到第一步。
+4. 選擇 Direct GT7 或 SimHub USB。
 
 ---
 
@@ -182,7 +180,7 @@ http://192.168.4.1
 - 螢幕休眠時只喚醒顯示，第一次點擊不會同時進入設定。
 - 選擇並儲存 Classic、GT3、Retro、Radar、Mono、Pocket 或 Endurance 儀表主題。
 - 進入 **DEVICE SETTINGS**，以 10% 級距調整 20%～100% 的亮度。
-- **CHANGE CONNECTION** 可切換 Direct GT7／SimHub USB，保留其他設定。
+- 可從 Waiting 畫面快速切換，也可直接在 **DEVICE SETTINGS** 選擇 Direct GT7／SimHub USB，其他設定會保留。
 - **RESET TO DEFAULT** 會清除 Wi-Fi、連線模式、觸控方向、主題與亮度，然後回到首次觸控設定。
 
 亮度預設為 80%，調整後會儲存，重新開機或喚醒時會恢復；自動休眠仍會完全關閉背光。

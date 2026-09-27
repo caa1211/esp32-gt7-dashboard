@@ -40,10 +40,10 @@ DSH1;42;1;140;4;5600;68;90;01:24.631;01:25.104;01:24.382;4.5;5;3;10;80;68;36;0;1
 - First setup runs touch orientation before presenting explicit **Direct GT7** and **SimHub USB** choices. The connection choice is persisted.
 - Direct GT7 enables Wi-Fi and GT7 UDP only. With no saved network it opens the setup portal; Wi-Fi cannot be skipped in this mode.
 - SimHub USB keeps the Wi-Fi radio off and accepts only valid DSH1 frames over physical USB serial.
-- Change Connection preserves other preferences. Reset to Default clears the connection, Wi-Fi credentials, touch orientation, theme and brightness, then returns to Touch Setup.
+- Switching connection from the Waiting screen or Device Settings preserves other preferences. Reset to Default clears the connection, Wi-Fi credentials, touch orientation, theme and brightness, then returns to Touch Setup.
 - Handshake/USB presence alone never affects telemetry freshness. Continued idle frames maintain an existing lock; disconnect the idle sender to release it immediately.
 - Wi-Fi work runs on a separate FreeRTOS task because portal scans/saves can wait internally. Task-owned WiFiManager communicates with the main USB/render loop using bounded command/status queues. GT7 UDP is owned by the main loop.
-- Device Settings exposes Change Connection and Reset to Default. Reset does not require an MCU restart.
+- Device Settings exposes direct GT7/SimHub choices and Reset to Default. Reset does not require an MCU restart.
 
 ## Validation
 
@@ -68,8 +68,8 @@ The `Telemetry protocol tests` CI workflow runs both. Formula tests use mocked p
 - Upgrade without a saved connection choice: preserve existing preferences and show connection selection.
 - Confirm SimHub discovery at 19200, baud negotiation, Custom Protocol evaluation, all 25 property mappings, and continuous stationary/paused frames.
 - Run GT7 only, USB only, both, wrong Wi-Fi credentials, no formula, invalid formula, unplug/reconnect, and SimHub restart.
-- While USB telemetry runs, scan/save/reset Wi-Fi; verify responsive rendering and no USB reconnect, protocol loss or mixed-source values.
+- While USB telemetry runs, enter and cancel GT7 Wi-Fi Setup; verify responsive rendering and no USB reconnect, protocol loss or mixed-source values.
 - Exercise both display controllers and every theme with valid/missing fuel, temperatures, RPM, pedals and aids; verify sleep/wake, preview, source change and memory stability.
-- Confirm settings are reachable while waiting, during play and after resetting Wi-Fi; verify portal cancellation and retries.
+- Confirm settings are reachable while waiting and during play; verify portal cancellation, retries and Reset to Default.
 
 This protocol is intentionally incompatible with the historical unversioned `custProtocol.txt` and upstream tyre-pressure mapping. Install the new formula together with the new firmware.

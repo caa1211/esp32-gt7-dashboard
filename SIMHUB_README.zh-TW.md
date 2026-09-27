@@ -5,7 +5,7 @@
 ## 1. 準備儀表
 
 1. 使用可傳輸資料的 USB 線把儀表接到電腦。
-2. 在儀表選擇 **SIMHUB USB**。若目前是 GT7 模式，開啟 **Settings → Device Settings → Change Connection → SIMHUB USB**。
+2. 在儀表選擇 **SIMHUB USB**。若目前停在 Waiting 畫面，可點上方的 **SWITCH TO SIMHUB USB**；也可以進入 **Settings → Device Settings**，直接選擇 **SIMHUB USB**。
 3. 關閉 Arduino Serial Monitor、PlatformIO Serial Monitor，以及其他可能占用相同 COM 埠的程式。
 
 ## 2. 讓 SimHub 偵測儀表
@@ -24,7 +24,8 @@
 2. 啟用 **Use JavaScript**。
 3. 開啟 [simhub/custom-protocol.txt](simhub/custom-protocol.txt)，複製檔案的**全部內容**並貼入公式欄位。
 4. 按下 Apply／Save，並確認 Custom Protocol 已啟用在正確的 COM 裝置上。
-5. 不要自行在公式尾端加入 `\n`；SimHub 會自動送出換行。
+
+公式編輯器的 **Raw result** 應以 `DSH1;` 開頭，而且第二欄序號會持續增加，例如 `DSH1;391;...`。這表示公式正在執行，但仍需確認資料送往正確的 Arduino 裝置與 COM 埠。
 
 這是 SimHub 的 **Arduino Custom Protocol**，不是 Custom Serial Devices 外掛。請勿使用 SimHub 的一般 Arduino sketch upload，否則會覆蓋本儀表韌體。
 
@@ -39,14 +40,15 @@
 - **USB linked: set Custom Protocol**：USB 與 SimHub 已連線，但尚未收到有效公式資料。確認已啟用 **Use JavaScript**、貼入完整公式並按下 Apply／Save。
 - **Check Custom Protocol (DSH1)**：公式格式或版本不正確。重新貼入 [simhub/custom-protocol.txt](simhub/custom-protocol.txt)。
 - 一直顯示 **Waiting for SimHub**：確認使用資料線、選對 COM 埠、沒有其他程式占用序列埠，而且 SimHub 正在收到遊戲資料。
+- Raw result 以 `DSH1;` 開頭且序號持續增加，但仍停在 Waiting：確認 Custom Protocol 已啟用於 SimHub 顯示為已連線的同一個 Arduino 裝置與 COM 埠。
 - 個別欄位顯示 `--`：該遊戲可能沒有提供對應屬性；其他支援欄位仍可正常使用。
-- 油量一直不變：重新貼入最新版 [simhub/custom-protocol.txt](simhub/custom-protocol.txt)。公式會優先使用 SimHub 的即時 `FuelPercent`，有油箱容量時則直接計算。
+- 油量一直不變：先檢查遊戲是否關閉油耗，再查看 SimHub 的 `Fuel`、`FuelPercent` 與油箱容量屬性。例如目前油量 30、公升容量 64 時，顯示 47% 是正確的；無限燃油會讓數值保持不變。
 - 韌體會過濾換檔時 750 ms 內短暫出現的空檔值；持續保持空檔或啟動時就在空檔，仍會正常顯示 `N`。
 
 ## 注意事項
 
 - 七個主題共用同一份公式，切換主題後不需要重新設定 SimHub。
-- 儀表會保存目前的連線選擇。使用 **Change Connection** 可切換 Direct GT7 與 SimHub USB。
+- 儀表會保存目前的連線選擇。可直接在 Waiting 畫面切換，或在 **Device Settings** 選擇 **DIRECT GT7**／**SIMHUB USB**。
 - **Reset to Default** 會清除 Wi-Fi 與所有儀表設定，然後重新開始首次設定流程。
 - Repo 其他位置的歷史公式使用舊封包格式；本韌體只能使用 [simhub/custom-protocol.txt](simhub/custom-protocol.txt)。
 

@@ -90,7 +90,7 @@ One firmware includes seven dashboard themes with the same live GT7 telemetry fe
   <img src="photos/theme_all.jpg" width="900" alt="Classic, GT3, Radar and Retro dashboard theme previews">
 </p>
 
-While the display is active, tap it once, choose **SELECT THEME**, then select a theme. The selection is saved by enum value and restored after reboot. Resetting Wi-Fi does not reset the selected theme or brightness.
+While the display is active, tap it once, choose **SELECT THEME**, then select a theme. The selection is saved by enum value and restored after reboot. Switching the telemetry connection does not reset the selected theme or brightness.
 
 ---
 
@@ -124,7 +124,7 @@ On a fresh device, complete Touch Setup first, then choose **DIRECT GT7** or **S
 - **SimHub USB:** Wi-Fi stays off. Connect a data-capable USB cable to the PC and follow [SimHub setup](SIMHUB_README.md).
 - **Direct GT7:** if no network is saved, the firmware opens Wi-Fi Setup automatically. Join **GT7-DASH-SETUP** on a phone, open **http://192.168.4.1**, choose the network shared with the PS5 and save.
 
-The two connection paths are separate. Use **DEVICE SETTINGS → CHANGE CONNECTION** when moving between Direct GT7 and SimHub USB.
+The two connection paths are separate. Switch directly from the Waiting screen, or select **DIRECT GT7** / **SIMHUB USB** in **DEVICE SETTINGS**.
 
 **RESET TO DEFAULT** clears Wi-Fi, connection, touch, theme and brightness settings, then returns to Touch Setup.
 
@@ -134,9 +134,10 @@ All seven themes work with either source. Missing values show `--` or disable th
 
 Touch Setup runs before connection selection on a fresh device or after Reset to Default:
 
-1. Tap the asymmetric target on the first screen so the firmware can detect orientation.
-2. Tap the verification target.
-3. Select **SAVE**, then choose Direct GT7 or SimHub USB.
+1. Tap the target on the right so the firmware can detect orientation.
+2. Tap the verification target on the left. The different position prevents an accidental double tap.
+3. Select **SAVE**, or use **RETRY** if the detected direction is wrong.
+4. Choose Direct GT7 or SimHub USB.
 
 An incomplete setup times out without saving, and incoming GT7 telemetry closes the
 setup immediately so it never holds the dashboard open. If an incorrect orientation is
@@ -155,7 +156,7 @@ saved, repeat the same procedure from the waiting screen to replace it.
 - Wake the display when it is asleep; the first tap does not also open Settings.
 - Select and save the Classic, GT3, Retro, Radar, Mono, Pocket, or Endurance dashboard theme.
 - Open **DEVICE SETTINGS** to adjust brightness from 20% to 100% in 10% steps.
-- Switch transport under **DEVICE SETTINGS → CHANGE CONNECTION**, or clear all setup with **RESET TO DEFAULT**.
+- Switch transport from the Waiting screen or directly under **DEVICE SETTINGS**, or clear all setup with **RESET TO DEFAULT**.
 
 Brightness defaults to 80%, is saved after adjustment, and is restored after reboot or wake. Automatic sleep still turns the backlight fully off.
 

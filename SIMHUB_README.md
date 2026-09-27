@@ -5,7 +5,7 @@ The dashboard supports **Direct GT7** over Wi-Fi and **SimHub USB** for PC games
 ## 1. Prepare the dashboard
 
 1. Connect the dashboard to the PC with a data-capable USB cable.
-2. Select **SIMHUB USB** on the dashboard. If it is currently in GT7 mode, open **Settings → Device Settings → Change Connection → SIMHUB USB**.
+2. Select **SIMHUB USB** on the dashboard. From a Waiting screen, use **SWITCH TO SIMHUB USB** at the top; from Settings, open **Device Settings** and select **SIMHUB USB**.
 3. Close Arduino Serial Monitor, PlatformIO Serial Monitor, and any other application using the same COM port.
 
 ## 2. Let SimHub detect the dashboard
@@ -26,6 +26,8 @@ The initial connection uses 19200 baud and SimHub negotiates the later rate auto
 4. Select Apply or Save and verify that the protocol is enabled for the correct COM device.
 5. Do not append `\n`; SimHub adds the line ending automatically.
 
+The formula editor's **Raw result** should begin with `DSH1;` and its second field should keep increasing, for example `DSH1;391;...`. This confirms that the formula is running. It does not by itself confirm that the correct COM device is receiving the data.
+
 This uses SimHub's **Arduino Custom Protocol**, not the Custom Serial Devices plugin. Do not use SimHub's generic Arduino sketch upload because it would overwrite the dashboard firmware.
 
 ## 4. Start the game
@@ -39,14 +41,15 @@ If SimHub detects the device but the dashboard remains on Waiting:
 - **USB linked: set Custom Protocol**: USB and SimHub are linked, but no valid formula data has arrived. Enable **Use JavaScript**, paste the complete formula, and select Apply or Save.
 - **Check Custom Protocol (DSH1)**: the formula has the wrong format or version. Paste [simhub/custom-protocol.txt](simhub/custom-protocol.txt) again.
 - **Waiting for SimHub** remains: verify the data cable, selected COM port, serial-port ownership, and that SimHub is receiving live game data.
+- Raw result starts with `DSH1;` and its sequence increases, but Waiting remains: confirm Custom Protocol is enabled for the same Arduino device and COM port shown as connected in SimHub.
 - Individual values show `--`: the current game may not expose those properties; other supported values still work.
-- Fuel never changes: paste the latest [simhub/custom-protocol.txt](simhub/custom-protocol.txt) again. The formula prefers SimHub's live `FuelPercent` alias and calculates from fuel capacity when available.
+- Fuel never changes: check the game's fuel-consumption setting and SimHub's `Fuel`, `FuelPercent`, and capacity properties. For example, 30 litres in a 64-litre tank correctly displays 47%; unlimited fuel will keep that value unchanged.
 - The firmware filters a brief neutral value during a gear change for 750 ms. A sustained or initial neutral still displays `N`.
 
 ## Notes
 
 - All seven themes use the same formula. Changing themes does not require another SimHub setup.
-- The current connection choice is saved. Use **Change Connection** to switch between Direct GT7 and SimHub USB.
+- The current connection choice is saved. Switch directly from the Waiting screen, or select **DIRECT GT7** / **SIMHUB USB** in **Device Settings**.
 - **Reset to Default** clears Wi-Fi and all dashboard preferences, then restarts first-time setup.
 - Historical formulas elsewhere in the repository use an older packet format. For this firmware, use only [simhub/custom-protocol.txt](simhub/custom-protocol.txt).
 

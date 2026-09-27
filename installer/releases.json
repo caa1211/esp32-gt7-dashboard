@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.0.0",
+      "notes": [
+        "Added explicit Direct GT7 Wi-Fi and SimHub USB connection modes with persistent on-device selection.",
+        "Added a shared SimHub Custom Protocol for all seven dashboard themes, including missing-value handling and transient neutral filtering.",
+        "Redesigned first-time touch, Wi-Fi, connection and reset flows with recoverable setup and direct connection switching from the Waiting screen.",
+        "Updated Device Settings and bilingual SimHub documentation for the new dual-source workflow."
+      ],
+      "manifests": {
+        "ili9341": "versions/2.0.0/manifest-ili9341.json",
+        "st7789": "versions/2.0.0/manifest-st7789.json"
+      }
+    },
+    {
       "version": "1.9.0",
       "notes": [
         "Added the Endurance dashboard theme, optimized for at-a-glance race telemetry with shift lights, a central gear display, lap timing, tyre temperatures, pedal inputs and fuel strategy."
@@ -107,16 +120,6 @@
       "manifests": {
         "ili9341": "versions/1.2.6/manifest-ili9341.json",
         "st7789": "versions/1.2.6/manifest-st7789.json"
-      }
-    },
-    {
-      "version": "1.2.5",
-      "notes": [
-        "Added tyre-temperature colour display."
-      ],
-      "manifests": {
-        "ili9341": "versions/1.2.5/manifest-ili9341.json",
-        "st7789": "versions/1.2.5/manifest-st7789.json"
       }
     }
   ]

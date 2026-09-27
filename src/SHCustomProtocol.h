@@ -1047,7 +1047,8 @@ public:
         gt7SelectionPending = false;
         wifiStopRequested = true;
         networkChanged = true;
-        showSettingsScreen(wifiReturnScreen);
+        if (wifiReturnScreen == SettingsScreen::Closed) closeSettings();
+        else showSettingsScreen(wifiReturnScreen);
     }
     void noteUsbCommand() { if (!usbSeen) connectingScreenActive = false; usbSeen = true; lastUsbCommandTime = millis(); }
     bool customReadPending() const { return receivingCustom; }
@@ -1406,17 +1407,47 @@ public:
 			barHeight,
 			tft.color565(28, 28, 28));
 
-		tft.drawCentreString(
-			"Tap for settings",
-			SCREEN_WIDTH / 2,
-			SCREEN_HEIGHT - 26,
-			1);
+		drawWaitingConnectionSwitch(false);
 
 		tft.drawCentreString(
 			String("v") + GT7_DASH_VERSION + "  |  by caa1211",
 			SCREEN_WIDTH / 2,
 			SCREEN_HEIGHT - 12,
 			1);
+	}
+
+	void drawWaitingConnectionSwitch(bool pressed)
+	{
+		const int x = 80, y = 24, width = 160, height = 25;
+		const uint16_t fill = pressed
+			? tft.color565(18, 74, 104)
+			: tft.color565(13, 15, 18);
+		const uint16_t border = pressed
+			? tft.color565(80, 180, 220)
+			: tft.color565(58, 62, 68);
+		tft.fillRoundRect(x, y, width, height, 7, fill);
+		tft.drawRoundRect(x, y, width, height, 7, border);
+		tft.setTextDatum(MC_DATUM);
+		tft.setTextColor(pressed ? TFT_WHITE : tft.color565(125, 130, 136), fill);
+		tft.drawString(
+			telemetry.mode == TelemetryMode::SimHub
+				? "SWITCH TO DIRECT GT7"
+				: "SWITCH TO SIMHUB USB",
+			x + width / 2, y + height / 2, 1);
+	}
+
+	bool waitingConnectionSwitchAtTouch() const
+	{
+		// Keep the control visually quiet while providing a finger-sized target.
+		return touchInside(50, 12, 220, 48);
+	}
+
+	void switchConnectionFromWaiting()
+	{
+		if (telemetry.mode == TelemetryMode::SimHub)
+			requestConnection(TelemetryMode::GT7, SettingsScreen::Closed);
+		else
+			selectConnection(TelemetryMode::SimHub);
 	}
 
 	void drawConnectingBar()
@@ -2225,6 +2256,7 @@ public:
 
 		static bool wasTouched = false;
 		static bool waitForReleaseAfterScreenChange = false;
+		static bool waitingConnectionPressed = false;
 		static uint16_t initialTouchRawX = 0, initialTouchRawY = 0;
 		uint16_t rawTouchX = 0;
 		uint16_t rawTouchY = 0;
@@ -2296,6 +2328,10 @@ public:
 		{
 			gameStoppedTimerStarted = true;
 			gameStoppedTime = millis();
+			if (settingsScreen == SettingsScreen::Closed) {
+				waitingConnectionPressed = waitingConnectionSwitchAtTouch();
+				if (waitingConnectionPressed) drawWaitingConnectionSwitch(true);
+			}
 		}
 
 		if (settingsScreen != SettingsScreen::Closed)
@@ -2332,8 +2368,15 @@ public:
 
 		if (!isTouched && wasTouched)
 		{
-			showSettingsScreen(SettingsScreen::Main);
-			waitForReleaseAfterScreenChange = true;
+			if (waitingConnectionPressed) {
+				const bool activate = waitingConnectionSwitchAtTouch();
+				waitingConnectionPressed = false;
+				if (activate) switchConnectionFromWaiting();
+				else drawWaitingConnectionSwitch(false);
+			} else {
+				showSettingsScreen(SettingsScreen::Main);
+				waitForReleaseAfterScreenChange = true;
+			}
 		}
 
 		wasTouched = isTouched;
