@@ -8,7 +8,7 @@
 An ESP32 dashboard with **direct GT7 Wi-Fi** and **SimHub USB** telemetry.
 GT7 needs no PC or SimHub; PC games use the bundled SimHub Custom Protocol.
 
-> **Source-tree feature:** Dual-source support requires a build of this source. The web installer continues to serve published releases. See [SimHub USB setup](SIMHUB_README.md).
+> **New in v2.0.0:** Direct GT7 Wi-Fi and SimHub USB connection modes are available through the [web installer](https://caa1211.github.io/esp32-gt7-dashboard/?lang=en), with no compilation required. For SimHub, see [SimHub USB setup](SIMHUB_README.md).
 
 <p align="center">
   <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">

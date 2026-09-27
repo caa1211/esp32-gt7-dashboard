@@ -8,7 +8,7 @@
 
 **GT7 直連不需要 SimHub 或 PC；PC 遊戲可使用 SimHub USB。**
 
-> **原始碼新功能：** 雙來源功能需編譯此份原始碼；網站安裝器仍提供已發布版本。請參閱 [SimHub USB 設定](SIMHUB_README.zh-TW.md)。
+> **v2.0.0 新功能：** 支援 Direct GT7 Wi-Fi 與 SimHub USB 兩種連線模式，可透過[網站安裝器](https://caa1211.github.io/esp32-gt7-dashboard/?lang=zh-TW)直接安裝，無需自行編譯。使用 SimHub 請參閱 [SimHub USB 設定](SIMHUB_README.zh-TW.md)。
 
 <p align="center">
   <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
