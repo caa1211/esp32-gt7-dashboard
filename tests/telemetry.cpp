@@ -68,7 +68,7 @@ int main() {
     selector.gt7.time = 100;
     assert(selector.update(4099) == TelemetrySource::GT7); // idle source stays selected without replacement
     assert(selector.update(4100) == TelemetrySource::None); // both sources expired
-    selector.gt7.running = true;
+    selector.gt7.running = true; selector.gt7.time = 4100;
     selector.active = TelemetrySource::None; selector.simhub.running = true; selector.simhub.time = 4100;
     assert(selector.update(4100) == TelemetrySource::GT7); // initial tie
     selector.mode = TelemetryMode::SimHub;
