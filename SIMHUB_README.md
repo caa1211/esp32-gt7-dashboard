@@ -62,8 +62,6 @@ If SimHub detects the device but the dashboard remains on Waiting:
 - **Waiting for SimHub** remains: verify the data cable, selected COM port, serial-port ownership, and that SimHub is receiving live game data.
 - Raw result starts with `DSH1;` and its sequence increases, but Waiting remains: confirm Custom Protocol is enabled for the same Arduino device and COM port shown as connected in SimHub.
 - Individual values show `--`: the current game may not expose those properties; other supported values still work.
-- Fuel never changes: check the game's fuel-consumption setting and SimHub's `Fuel`, `FuelPercent`, and capacity properties. For example, 30 litres in a 64-litre tank correctly displays 47%; unlimited fuel will keep that value unchanged.
-- The firmware filters a brief neutral value during a gear change for 750 ms. A sustained or initial neutral still displays `N`.
 
 ## Notes
 
