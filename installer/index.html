@@ -597,11 +597,18 @@
 
       <a
         class="simhub-protocol-link"
+        id="simhub-guide-link"
+        href="https://github.com/caa1211/esp32-gt7-dashboard/blob/main/SIMHUB_README.md"
+        target="_blank"
+        rel="noopener noreferrer"
+      >Using SimHub? View setup guide ↗</a>
+      <a
+        class="simhub-protocol-link"
         id="simhub-protocol-link"
         href="https://raw.githubusercontent.com/caa1211/esp32-gt7-dashboard/main/simhub/custom-protocol.txt"
         target="_blank"
         rel="noopener noreferrer"
-      >Using SimHub? Open Custom Protocol ↗</a>
+      >Open Custom Protocol ↗</a>
 
       <p class="compatibility-warning" id="compatibility-warning">
         ⚠️ ESP32-2432S028 only. Installing replaces the firmware currently on the device.
@@ -685,7 +692,8 @@
           controllerHelp: "Select the controller fitted to your ESP32-2432S028.",
           connect: "Connect & install",
           unsupported: "Use Chrome, Edge, or another Web Serial browser",
-          simhubProtocol: "Using SimHub? Open Custom Protocol ↗",
+          simhubGuide: "Using SimHub? View setup guide ↗",
+          simhubProtocol: "Open Custom Protocol ↗",
           warning: "⚠️ ESP32-2432S028 only. Installing replaces the firmware currently on the device.",
           caption: "Six switchable themes. The same live GT7 telemetry in every layout.",
           complete: "✅ Installation complete",
@@ -721,7 +729,8 @@
           controllerHelp: "請選擇你的 ESP32-2432S028 所使用的顯示控制器。",
           connect: "連接並安裝",
           unsupported: "請使用 Chrome、Edge 或其他支援 Web Serial 的瀏覽器",
-          simhubProtocol: "使用 SimHub？開啟 Custom Protocol ↗",
+          simhubGuide: "使用 SimHub？查看設定教學 ↗",
+          simhubProtocol: "開啟 Custom Protocol ↗",
           warning: "⚠️ 僅適用於 ESP32-2432S028。安裝後會取代裝置目前的韌體。",
           caption: "六種可切換主題，每種版面都顯示相同的即時 GT7 遙測資料。",
           complete: "✅ 安裝完成",
@@ -758,6 +767,9 @@
         document.getElementById("connect-button").textContent = text.connect;
         document.getElementById("unsupported-button").textContent = text.unsupported;
         document.getElementById("simhub-protocol-link").textContent = text.simhubProtocol;
+        const simhubGuide = document.getElementById("simhub-guide-link");
+        simhubGuide.textContent = text.simhubGuide;
+        simhubGuide.href = `https://github.com/caa1211/esp32-gt7-dashboard/blob/main/SIMHUB_README${language === "zh" ? ".zh-TW" : ""}.md`;
         document.getElementById("compatibility-warning").textContent = text.warning;
         document.getElementById("theme-caption").textContent = text.caption;
 
