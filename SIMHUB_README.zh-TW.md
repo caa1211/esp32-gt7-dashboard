@@ -19,7 +19,7 @@
 
 3. 啟用 Arduino 功能，讓 SimHub 掃描 USB 裝置。
 4. 找到儀表所在的 COM 埠，並加入或啟用該裝置。韌體識別名稱為 `GT7 SimHub Dash`。
-5. 等待 SimHub 顯示裝置已連線。看到 COM 埠只代表 USB 已偵測到；還要完成下一段 Custom Protocol 設定才會有遙測資料。
+5. 等待 SimHub 顯示裝置已連線。看到 COM 埠只代表 USB 已偵測到；還要完成下一段 Custom Protocol (自訂義協議) 設定才會有遙測資料。
 
 <img src="photos/simhub/01.png" alt="SimHub 已識別並連線 GT7 SimHub Dash" width="900">
 
@@ -27,7 +27,7 @@
 
 初始連線速度為 19200 baud，之後由 SimHub 自動協商，不需要手動建立虛擬 COM、TCP 連線或安裝額外外掛。
 
-## 3. 加入 Custom Protocol
+## 3. 加入 Custom Protocol (自訂義協議)
 
 1. 在剛加入的 Arduino 裝置中，找到 **Custom Protocol** 設定或公式編輯器。
 2. 啟用 **Use JavaScript**。
@@ -61,8 +61,6 @@
 - 一直顯示 **Waiting for SimHub**：確認使用資料線、選對 COM 埠、沒有其他程式占用序列埠，而且 SimHub 正在收到遊戲資料。
 - Raw result 以 `DSH1;` 開頭且序號持續增加，但仍停在 Waiting：確認 Custom Protocol 已啟用於 SimHub 顯示為已連線的同一個 Arduino 裝置與 COM 埠。
 - 個別欄位顯示 `--`：該遊戲可能沒有提供對應屬性；其他支援欄位仍可正常使用。
-- 油量一直不變：先檢查遊戲是否關閉油耗，再查看 SimHub 的 `Fuel`、`FuelPercent` 與油箱容量屬性。例如目前油量 30、公升容量 64 時，顯示 47% 是正確的；無限燃油會讓數值保持不變。
-- 韌體會過濾換檔時 750 ms 內短暫出現的空檔值；持續保持空檔或啟動時就在空檔，仍會正常顯示 `N`。
 
 ## 注意事項
 
