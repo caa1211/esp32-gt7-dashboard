@@ -14,6 +14,16 @@
       }
     },
     {
+      "version": "1.9.1",
+      "notes": [
+        "Redesigned the Wi-Fi setup screen with a QR code for joining GT7-DASH-SETUP, clearer manual connection instructions and the setup address."
+      ],
+      "manifests": {
+        "ili9341": "versions/1.9.1/manifest-ili9341.json",
+        "st7789": "versions/1.9.1/manifest-st7789.json"
+      }
+    },
+    {
       "version": "1.9.0",
       "notes": [
         "Added the Endurance dashboard theme, optimized for at-a-glance race telemetry with shift lights, a central gear display, lap timing, tyre temperatures, pedal inputs and fuel strategy."
@@ -110,16 +120,6 @@
       "manifests": {
         "ili9341": "versions/1.2.7/manifest-ili9341.json",
         "st7789": "versions/1.2.7/manifest-st7789.json"
-      }
-    },
-    {
-      "version": "1.2.6",
-      "notes": [
-        "Introduced the refined low-RAM GT3 dashboard UI."
-      ],
-      "manifests": {
-        "ili9341": "versions/1.2.6/manifest-ili9341.json",
-        "st7789": "versions/1.2.6/manifest-st7789.json"
       }
     }
   ]
