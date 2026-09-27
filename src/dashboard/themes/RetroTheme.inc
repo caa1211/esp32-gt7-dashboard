@@ -145,7 +145,7 @@
 		}
 
 		const int displayedRpm = ((state.engineRpm + 25) / 50) * 50;
-		drawRetroTextValue(5, 25, 49, 20, String(displayedRpm), "retroRpm",
+		drawRetroTextValue(5, 25, 49, 20, state.engineRpm < 0 ? "--" : String(displayedRpm), "retroRpm",
 			pulse ? alert : ink, 2, MC_DATUM, forceUpdate);
 		previousActive = active;
 		previousPulse = pulse;
@@ -159,7 +159,7 @@
 		const int brakeApplied = constrain(state.absFilteredLevel.toInt(), 0, 100);
 		const int throttleInput = constrain(state.tcLevel.toInt(), 0, 100);
 		const int throttleApplied = constrain(state.tcFilteredLevel.toInt(), 0, 100);
-		const String value = String(brakeInput) + ":" + String(brakeApplied) + ":" +
+		const String value = state.absLevel + ":" + state.tcLevel + ":" + String(brakeInput) + ":" + String(brakeApplied) + ":" +
 			String(throttleInput) + ":" + String(throttleApplied);
 		if (!forceUpdate && prevData["retroPedals"] == value) return;
 		const uint16_t paper = tft.color565(198, 186, 152);
@@ -188,6 +188,7 @@
 			{
 				const int y = 211 + row * 13;
 				tft.drawRect(164, y, 68, 7, faint);
+                if ((row == 0 ? state.absLevel : state.tcLevel) == "--") tft.drawString("--", 189, y, 1);
 				const int inputW = 66 * values[row][0] / 100;
 				const int appliedW = 66 * values[row][1] / 100;
 				if (inputW > 0) tft.fillRect(165, y + 1, inputW, 5, ink);
@@ -210,6 +211,7 @@
 		{
 			const int y = 7 + row * 13;
 			pedalSprite.drawRect(barX, y, barW, barH, faint);
+            if ((row == 0 ? state.absLevel : state.tcLevel) == "--") pedalSprite.drawString("--", barX + 25, y, 1);
 			const int inputW = (barW - 2) * values[row][0] / 100;
 			const int appliedW = (barW - 2) * values[row][1] / 100;
 			if (inputW > 0) pedalSprite.fillRect(barX + 1, y + 1, inputW, barH - 2, ink);

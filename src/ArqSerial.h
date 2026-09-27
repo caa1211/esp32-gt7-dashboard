@@ -22,7 +22,7 @@ class ARQSerial
 {
 private:
 
-	byte partialdatabuffer[24];
+	byte partialdatabuffer[32];
 	int Arq_LastValidPacket = 255;
 	RingBuf<uint8_t, 32> DataBuffer;
 	IdleFunction idleFunction = 0;
@@ -32,114 +32,48 @@ private:
 	int testfailidx2 = 0;
 #endif
 
-	int Arq_TimedRead()
-	{
-		int c;
-		unsigned long fsr_startMillis = millis();
-		do {
-			if (idleFunction != 0) idleFunction(true);
-			c = StreamRead();
-			if (c >= 0) {
-#ifdef TESTFAIL
-				testfailidx = (testfailidx + 1) % 5000;
-				if (testfailidx == 500)
-					return random(255);
+    uint8_t rxStage = 0, rxId = 0, rxLength = 0, rxOffset = 0, rxCrc = 0;
+    uint32_t rxLastByte = 0;
 
-				if (testfailidx == 1000)
-					return -1;
-#endif
-				return c;
-			}
-		} while (millis() - fsr_startMillis < 100);
-		return -1;
-	}
-
-	void ProcessIncomingData() {
-		int packetID, length, header, res, i, crc, nextpacketid;
-		byte currentCrc;
-
-		while (StreamAvailable() > 0) {
-			header = Arq_TimedRead();
-			//DebugPrintLn("hello1");
-			currentCrc = 0;
-
-			if (header == 0x01) {
-				byte failureReason = 0x00;
-
-				header = Arq_TimedRead();
-				if (header != 0x01) {
-					return;
-				}
-
-				// read id of packet
-				packetID = Arq_TimedRead(); // ?
-				if (packetID < 0) {
-					failureReason = 0x01; // bad id
-					SendNAcq(Arq_LastValidPacket, failureReason);
-					continue;
-				}
-
-				// read length of data
-				length = Arq_TimedRead(); // 1
-				if (length <= 0 || length > 32) {
-					failureReason = 0x02; // bad length
-					SendNAcq(Arq_LastValidPacket, failureReason);
-					continue;
-				}
-
-				// read data
-				for (i = 0; i < length && !failureReason; i++) {
-					res = Arq_TimedRead(); // 3 49 16
-					partialdatabuffer[i] = res;
-					if (res < 0) {
-						failureReason = 0x05; // bad data
-						SendNAcq(Arq_LastValidPacket, failureReason);
-						continue;
-					}
-				}
-
-				// read checksum
-				crc = Arq_TimedRead(); // 106
-				if (crc < 0) {
-					failureReason = 0x03; // bad data b/c no checksum
-					SendNAcq(Arq_LastValidPacket, failureReason);
-					continue;
-				}
-
-				// generate checksum for received data and check it with received checksum
-				currentCrc = updateCrc(currentCrc, packetID);
-				currentCrc = updateCrc(currentCrc, length);
-				for (i = 0; i < length; i++) {
-					currentCrc = updateCrc(currentCrc, partialdatabuffer[i]);
-				}
-
-				if (crc != currentCrc) {
-					failureReason = 0x04; // bad data b/c checksum doesnt match
-					SendNAcq(Arq_LastValidPacket, failureReason);
-					continue;
-				}
-
-				// push valid data and set state for next packet
-				nextpacketid = Arq_LastValidPacket > 127 ? 0 : Arq_LastValidPacket + 1;
-				if (packetID == nextpacketid || packetID == 255) {
-					for (i = 0; i < length; i++) {
-						// save valid data to buffer
-						DataBuffer.push(partialdatabuffer[i]);
-					}
-					// save valid packet id
-					Arq_LastValidPacket = packetID;
-				}
-#ifdef TESTFAIL
-				testfailidx = (testfailidx + 1) % 5000;
-				if (testfailidx != 788) {
-					SendAcq(packetID);
-				}
-#else
-				SendAcq(packetID);
-#endif
-			}
-		}
-	}
+    void ProcessIncomingData() {
+        if (rxStage && uint32_t(millis() - rxLastByte) > 100) {
+            rxStage = 0;
+            SendNAcq(Arq_LastValidPacket, 0x05);
+        }
+        // Decode one ARQ frame at a time. Never overwrite unconsumed payload.
+        if (DataBuffer.size() != 0) return;
+        while (StreamAvailable() > 0) {
+            const int value = StreamRead();
+            if (value < 0) return;
+            const uint8_t c = static_cast<uint8_t>(value);
+            rxLastByte = millis();
+            if (rxStage == 0) { if (c == 1) rxStage = 1; }
+            else if (rxStage == 1) { rxStage = c == 1 ? 2 : 0; }
+            else if (rxStage == 2) {
+                rxId = c; rxCrc = updateCrc(0, c); rxStage = 3;
+            } else if (rxStage == 3) {
+                if (c == 0 || c > sizeof(partialdatabuffer)) {
+                    rxStage = 0; SendNAcq(Arq_LastValidPacket, 0x02); continue;
+                }
+                rxLength = c; rxOffset = 0;
+                rxCrc = updateCrc(rxCrc, c); rxStage = 4;
+            } else if (rxStage == 4) {
+                partialdatabuffer[rxOffset++] = c;
+                rxCrc = updateCrc(rxCrc, c);
+                if (rxOffset == rxLength) rxStage = 5;
+            } else {
+                rxStage = 0;
+                if (c != rxCrc) { SendNAcq(Arq_LastValidPacket, 0x04); continue; }
+                const int nextId = Arq_LastValidPacket > 127 ? 0 : Arq_LastValidPacket + 1;
+                if (rxId == nextId || rxId == 255) {
+                    for (unsigned i = 0; i < rxLength; ++i) DataBuffer.push(partialdatabuffer[i]);
+                    Arq_LastValidPacket = rxId;
+                }
+                SendAcq(rxId);
+                return;
+            }
+        }
+    }
 
 	void SendAcq(uint8_t packetId)
 	{

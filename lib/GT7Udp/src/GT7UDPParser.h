@@ -118,6 +118,7 @@ class GT7_UDP_Parser {
     public:
 		void begin(const IPAddress playstationIP, const char packetVersion = 'A');
 		void sendHeartbeat();
+        void stop() { Udp.stop(); packet = {}; }
         uint8_t getFlag(int index);
         uint8_t getCurrentGearFromByte(void);
         uint8_t getSuggestedGearFromByte(void);
@@ -128,7 +129,7 @@ class GT7_UDP_Parser {
     private: 
         WiFiUDP Udp;
         IPAddress remoteIP;
-        Packet packet;
+        Packet packet = {};
         int iv2;
         char detectedPacketVersion;
         char heartbeatMsg;

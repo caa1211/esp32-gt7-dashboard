@@ -138,7 +138,7 @@ Packet GT7_UDP_Parser::readData() {
     } else if (byteStream == PACKET_C_SIZE) {
         detectedPacketVersion = 'C';
     } else {
-        detectedPacketVersion = ' ';
+        return packet;
     }
 
     int iv1 = *reinterpret_cast<int*>(&recvBuffer[0x40]); // Seed IV is always located there
@@ -170,6 +170,11 @@ Packet GT7_UDP_Parser::readData() {
 
     std::array<uint8_t, sizeof(packet.packetContent)> decryptedData;
     salsa20.processBytes((recvBuffer), decryptedData.data(), byteStream);
+    uint32_t magic = 0;
+    memcpy(&magic, decryptedData.data(), sizeof(magic));
+    if (magic != 0x47375330) return packet;
+    // Zero fields absent in shorter packet variants instead of retaining old data.
+    memset(&packet.packetContent, 0, sizeof(packet.packetContent));
     memcpy(&packet.packetContent, decryptedData.data(), byteStream);
     return packet;
     }

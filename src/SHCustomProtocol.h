@@ -1,3 +1,7 @@
+﻿#include "TelemetrySource.h"
+#include "SimHubProtocol.h"
+#include "DashboardWiFiCredentials.h"
+#include <qrcode.h>
 
 #ifndef __SHCUSTOMPROTOCOL_H__
 #define __SHCUSTOMPROTOCOL_H__
@@ -13,12 +17,10 @@
 #include <map>
 #include <BleGamepad.h> // libreria bluetooth
 #include <GT7DerivedMetrics.h>
-#include <qrcode.h>
 #include "version.h"
 
 static LGFX tft;
 
-static const int RESET_WAITING_TIME = 3;
 static const int SCREEN_WIDTH = 320;
 static const int SCREEN_HEIGHT = 240;
 static const int X_CENTER = SCREEN_WIDTH / 2;
@@ -125,7 +127,6 @@ namespace DashboardLayout
 #ifndef GT7_DASHBOARD_LEGACY_UI
 #define GT7_DASHBOARD_LEGACY_UI 0
 #endif
-
 // Stable persisted values. Never reorder or reuse an existing numeric value.
 enum class DashboardTheme : uint8_t
 {
@@ -233,66 +234,32 @@ static void showWifiConnectionFailedScreen()
 	tft.drawString("Setup portal will restart", 160, 205);
 }
 
-static void showWifiSetupScreen()
-{
-	tft.fillScreen(TFT_BLACK);
-	tft.setTextPadding(0);
-	tft.setTextDatum(MC_DATUM);
-
-	tft.setTextColor(TFT_WHITE, TFT_BLACK);
-	tft.drawString("WI-FI SETUP", X_CENTER, 18, 4);
-
-	static constexpr uint8_t QR_VERSION = 3;
-	static constexpr int QR_SCALE = 4;
-	static constexpr int QR_QUIET_MODULES = 4;
-	static constexpr int QR_X = 10;
-	static constexpr int QR_Y = 47;
-	uint8_t qrData[128] = {};
-	QRCode qr;
-	if (qrcode_initText(&qr, qrData, QR_VERSION, ECC_LOW,
-		"WIFI:T:nopass;S:GT7-DASH-SETUP;;") == 0)
-	{
-		const int outerSize = (qr.size + QR_QUIET_MODULES * 2) * QR_SCALE;
-		tft.fillRect(QR_X, QR_Y, outerSize, outerSize, TFT_WHITE);
-		for (uint8_t y = 0; y < qr.size; ++y)
-		{
-			for (uint8_t x = 0; x < qr.size; ++x)
-			{
-				if (!qrcode_getModule(&qr, x, y)) continue;
-				tft.fillRect(
-					QR_X + (x + QR_QUIET_MODULES) * QR_SCALE,
-					QR_Y + (y + QR_QUIET_MODULES) * QR_SCALE,
-					QR_SCALE, QR_SCALE, TFT_BLACK);
-			}
-		}
-	}
-
-	tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-	tft.drawString("Scan to join", 235, 53, 2);
-	tft.drawString("or connect manually", 235, 75, 1);
-	tft.drawString("Wi-Fi", 235, 94, 1);
-	tft.setTextColor(TFT_CYAN, TFT_BLACK);
-	tft.drawString("GT7-DASH-SETUP", 235, 116, 2);
-	tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-	tft.drawString("Then open", 235, 143, 1);
-	tft.setTextColor(TFT_WHITE, TFT_BLACK);
-	tft.drawString("192.168.4.1", 235, 164, 2);
-
-	tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-	tft.drawCentreString(
-		String("v") + GT7_DASH_VERSION,
-		X_CENTER,
-		SCREEN_HEIGHT - 14,
-		1);
-}
-
 int currentPage = 1;	  // Variabile per tenere traccia della pagina corrente
 bool forceUpdate = false; // Variabile per forzare l'aggiornamento delle celle
 
 class SHCustomProtocol : private DashboardState
 {
 private:
-	Preferences dashboardPreferences;
+    TelemetrySelector telemetry;
+    DashboardState gt7State, simhubState;
+    bool gt7Dirty = false, simhubDirty = false;
+    bool firstRun = false, networkChanged = true, gt7TransportReady = false;
+    bool wifiConfigured = false;
+    bool wifiStopRequested = false, wifiPortalActive = false;
+    bool touchSetupRequired = false;
+    bool connectionChoiceCanCancel = false;
+    bool gt7SelectionPending = false;
+    bool pendingSelectionWasFirstRun = false;
+    TelemetryMode modeBeforePendingGT7 = TelemetryMode::Auto;
+    String networkStatus = "Wi-Fi not configured";
+    bool receivingCustom = false, customOverflow = false, customProtocolError = false;
+    char customLine[SimHubProtocol::maxLength] = {};
+    unsigned customLength = 0;
+    uint32_t customStarted = 0, customLastByte = 0, lastSimHubSequence = 0;
+    bool haveSimHubSequence = false, usbSeen = false;
+    SimHubProtocol::GearFilter simHubGearFilter;
+    uint32_t lastUsbCommandTime = 0, settingsStatusRefresh = 0;
+    Preferences dashboardPreferences;
 	DashboardTheme activeDashboardTheme = DashboardTheme::GT3;
 	DashboardTheme renderedDashboardTheme = DashboardTheme::GT3;
 	DashboardTheme previewDashboardTheme = DashboardTheme::GT3;
@@ -315,9 +282,7 @@ private:
 	TouchRotation touchRotation = TouchRotation::Deg0;
 	TouchRotation pendingTouchRotation = TouchRotation::Deg0;
 	bool touchCalibrationVerified = false;
-	bool touchCalibrationEntryArmed = false;
-	bool touchCalibrationAwaitingSecondTap = false;
-	unsigned long touchCalibrationFirstTapTime = 0;
+	uint32_t touchCalibrationReadyAt = 0;
 	uint16_t originalTouchX = 0;
 	uint16_t originalTouchY = 0;
 
@@ -331,7 +296,7 @@ private:
 	static constexpr unsigned long BRIGHTNESS_SAVE_DELAY_MS = 750UL;
 	static constexpr bool TOUCH_SCREEN_CONTROL_ENABLED = true;
 
-	// Connecting 畫面動畫設定
+	// Connecting ?恍?閮剖?
 	static constexpr unsigned long CONNECT_ANIMATION_INTERVAL = 1000;
 	static constexpr int CONNECT_DOT_COUNT = 5;
 
@@ -344,33 +309,35 @@ private:
 	bool gameStoppedTimerStarted = false;
 	bool screenSleeping = false;
 
-	// 是否由使用者手動關閉
+	// ?臬?曹蝙?刻?????
 	bool screenOffByUser = false;
 
 	// Tap the active dashboard to open the touch-driven Settings menu.
-	enum class SettingsScreen : uint8_t
+    enum class SettingsScreen : uint8_t
 	{
 		Closed,
 		Main,
 		ThemeSelection,
 		DeviceSettings,
-		WifiResetConfirmation,
+		InitialTouch,
+		ConnectionChoice,
+		WifiSettings,
+		ResetConfirmation,
 		TouchCalibration,
 	};
 
 	static constexpr unsigned long SETTINGS_TIMEOUT_MS = 15000UL;
-	static constexpr unsigned long TOUCH_CALIBRATION_DOUBLE_TAP_MS = 3000UL;
 	SettingsScreen settingsScreen = SettingsScreen::Closed;
+	SettingsScreen wifiReturnScreen = SettingsScreen::ConnectionChoice;
 	unsigned long settingsLastInteractionTime = 0;
 	int settingsPressedButton = -1;
 	bool wifiResetConfirmOpen = false;
 	bool wifiResetRequested = false;
 
-	// 記錄上一筆 GT7 執行狀態，用來偵測 False -> True
+	// 閮?銝?蝑?GT7 ?瑁?????其??菜葫 False -> True
 	bool previousGameRunning = false;
 
-	// 避免第一筆資料被誤判為狀態切換
-	bool gameRunningInitialized = false;
+	// ?踹?蝚砌?蝑??◤隤文?箇?????
 
 	static bool isValidDashboardTheme(uint8_t value)
 	{
@@ -434,12 +401,10 @@ private:
 		}
 	}
 
-	int calibrationRotationForTouch(uint16_t rawX, uint16_t rawY) const
+	int calibrationRotationForTouch(uint16_t rawX, uint16_t rawY,
+		int targetX = SCREEN_WIDTH / 2, int targetY = 18,
+		int hitHalfWidth = 48, int hitHalfHeight = 18) const
 	{
-		constexpr int targetX = SCREEN_WIDTH / 2;
-		constexpr int targetY = 18;
-		constexpr int hitHalfWidth = 48;
-		constexpr int hitHeight = 26;
 		int closestRotation = -1;
 		uint32_t closestDistance = UINT32_MAX;
 		for (uint8_t value = 0; value < 4; ++value)
@@ -449,7 +414,7 @@ private:
 			applyTouchRotation(rawX, rawY,
 				static_cast<TouchRotation>(value), candidateX, candidateY);
 			if (abs(static_cast<int>(candidateX) - targetX) > hitHalfWidth ||
-				candidateY > hitHeight)
+				abs(static_cast<int>(candidateY) - targetY) > hitHalfHeight)
 				continue;
 			const int dx = static_cast<int>(candidateX) - targetX;
 			const int dy = static_cast<int>(candidateY) - targetY;
@@ -549,6 +514,7 @@ private:
 		uint8_t storedTheme = static_cast<uint8_t>(DashboardTheme::GT3);
 		if (dashboardPreferencesReady)
 		{
+			touchSetupRequired = !dashboardPreferences.isKey("touchRot");
 			storedTheme = dashboardPreferences.getUChar(
 				"theme", static_cast<uint8_t>(DashboardTheme::GT3));
 			const uint8_t storedBrightness = dashboardPreferences.getUChar(
@@ -562,6 +528,10 @@ private:
 			touchRotation = storedTouchRotation <= static_cast<uint8_t>(TouchRotation::Deg270)
 				? static_cast<TouchRotation>(storedTouchRotation)
 				: TouchRotation::Deg0;
+		}
+		else
+		{
+			touchSetupRequired = true;
 		}
 		pendingTouchRotation = touchRotation;
 
@@ -579,13 +549,13 @@ private:
 	}
 
 #if INCLUDE_GT7_WIFI
-	// 最近一次真正收到新 GT7 UDP 封包的時間
+	// ?餈?甈∠?甇??唳 GT7 UDP 撠?????
 	uint32_t lastGT7PacketTime = 0;
 	int32_t lastGT7PacketId = -1;
 	bool hasReceivedGT7Packet = false;
 	bool gt7CarOnTrack = false;
 
-	// GT7 衍生數據：ABS 與剩餘油量圈數。
+	// GT7 銵??豢?嚗BS ?擗硃???詻?
 	GT7DerivedMetrics derivedMetrics;
 
 #endif
@@ -594,7 +564,7 @@ private:
 	{
 		previousBestLapMs = -1;
 		lastProcessedLapMs = -1;
-		sessionBestLiveDeltaSeconds = "+0.000";
+		gt7LapDifference = "+0.000";
 	}
 
 	String formatLapTimeMs(int32_t milliseconds)
@@ -680,7 +650,7 @@ private:
 		return minutes * 60000L + seconds * 1000L + millisText.toInt();
 	}
 
-	// Connecting 畫面狀態
+	// Connecting ?恍???
 	bool connectingScreenActive = false;
 	// int connectingDotIndex = 0;
 	int connectingAnimationStep = 0;
@@ -743,42 +713,46 @@ public:
 	}
 
 #if INCLUDE_GT7_WIFI
-	bool readGT7Wifi()
+	bool readGT7Wifi(DashboardState &state)
 	{
 		gt7Packet = gt7Telem.readData();
+
+        // A stopped/reopened socket has no sample until a validated packet arrives.
+        if (gt7Packet.packetContent.magic != 0x47375330) return false;
 
 		const int32_t packetId =
 			gt7Packet.packetContent.packetId;
 
 		/*
-		 * readData() 沒收到新資料時會保留上一筆 Packet。
-		 * 因此用 packetId 是否改變，判斷這一圈是否真的收到新封包。
+		 * readData() 瘝?唳鞈???靽?銝?蝑?Packet??
+		 * ?迨??packetId ?臬?寡?嚗?琿???衣???唳撠???
 		 */
 		if (hasReceivedGT7Packet && packetId == lastGT7PacketId)
 		{
 			return false;
 		}
 
-		// 尚未收到任何有效資料時，忽略初始化的空 Packet。
+		// 撠?嗅隞颱???鞈???敹賜????蝛?Packet??
 		if (!hasReceivedGT7Packet && packetId == 0 &&
 			gt7Packet.packetContent.magic == 0)
 		{
 			return false;
 		}
 
+        if (!telemetry.gt7.alive(millis())) { derivedMetrics.reset(); resetLapDifference(); }
 		hasReceivedGT7Packet = true;
 		lastGT7PacketId = packetId;
 		lastGT7PacketTime = millis();
 
 		const auto &data = gt7Packet.packetContent;
 
-		// 速度與檔位
-		speed = String(static_cast<int>(data.speed * 3.6f));
+		// ?漲??雿?
+		state.speed = String(static_cast<int>(data.speed * 3.6f));
 
 		const int currentGear =
 			gt7Telem.getCurrentGearFromByte();
 
-		gear = currentGear == 0
+		state.gear = currentGear == 0
 				   ? "N"
 				   : String(currentGear);
 
@@ -786,7 +760,7 @@ public:
 		const float rpm = data.EngineRPM;
 		const float maxRpm = data.maxAlertRPM;
 		const float redLineRpm = data.minAlertRPM;
-		engineRpm = max(0, static_cast<int>(lroundf(rpm)));
+		state.engineRpm = max(0, static_cast<int>(lroundf(rpm)));
 		static constexpr float FALLBACK_MAX_RPM = 10000.0f;
 		static constexpr float MIN_REASONABLE_MAX_RPM = 1000.0f;
 		static constexpr float MAX_REASONABLE_MAX_RPM = 25000.0f;
@@ -794,59 +768,59 @@ public:
 			maxRpm <= MAX_REASONABLE_MAX_RPM;
 		const float effectiveMaxRpm = maxRpmValid ? maxRpm : FALLBACK_MAX_RPM;
 
-		rpmAlertRangeValid = maxRpmValid && redLineRpm > 0.0f &&
+		state.rpmAlertRangeValid = maxRpmValid && redLineRpm > 0.0f &&
 			redLineRpm < maxRpm;
 
-		rpmPercent = constrain(
+		state.rpmPercent = constrain(
 			static_cast<int>((rpm / effectiveMaxRpm) * 100.0f),
 			0,
 			100);
 
-		rpmRedLineSetting = rpmAlertRangeValid
+		state.rpmRedLineSetting = state.rpmAlertRangeValid
 			? constrain(
 				static_cast<int>((redLineRpm / maxRpm) * 100.0f),
 				1,
 				99)
 			: 90;
 
-		// 圈速：currentLap 只有使用 C Packet 時才有值
-		currentLapTime = formatLapTimeMs(data.currentLap);
-		lastLapTime = formatLapTimeMs(data.lastLaptime);
-		bestLapTime = formatLapTimeMs(data.bestLaptime);
+		// ??currentLap ?芣?雿輻 C Packet ????
+		state.currentLapTime = formatLapTimeMs(data.currentLap);
+		state.lastLapTime = formatLapTimeMs(data.lastLaptime);
+		state.bestLapTime = formatLapTimeMs(data.bestLaptime);
 
-		// 圈數
+		// ?
 		const int currentLap = max(0, static_cast<int>(data.lapCount));
 		const int totalLapCount = max(0, static_cast<int>(data.totalLaps));
 
-		// 上一圈與最佳圈的圈速差。新最佳圈會顯示 +0.000。
-		sessionBestLiveDeltaSeconds =
+		// 銝????雿喳????榆??雿喳??＊蝷?+0.000??
+		state.sessionBestLiveDeltaSeconds =
 			updateLastBestDifference(
 				data.lastLaptime,
 				data.bestLaptime);
 
-		// 此欄位不再顯示 Delta P，畫面改為油門／煞車圖條。
-		sessionBestLiveDeltaProgressSeconds = "";
+		// 甇斗?雿??＊蝷?Delta P嚗?Ｘ?箸硃?嚗?頠?璇?
+		state.sessionBestLiveDeltaProgressSeconds = "";
 
 		if (totalLapCount > 0)
 		{
-			tyrePressureRearLeft = String(currentLap) + "/" + String(totalLapCount);
+			state.tyrePressureRearLeft = String(currentLap) + "/" + String(totalLapCount);
 		}
 		else
 		{
-			tyrePressureRearLeft = String(currentLap);
+			state.tyrePressureRearLeft = String(currentLap);
 		}
 
-		// 目前封包只有賽前起跑位置，沒有比賽中的即時排名
+		// ?桀?撠??芣?鞈賢?韏瑁?雿蔭嚗???鞈賭葉?????
 		if (data.RaceStartPosition > 0)
 		{
-			tyrePressureFrontRight = String(data.RaceStartPosition);
+			state.tyrePressureFrontRight = String(data.RaceStartPosition);
 		}
 		else
 		{
-			tyrePressureFrontRight = "--";
+			state.tyrePressureFrontRight = "--";
 		}
 
-		// 油量百分比
+		// 瘝寥??曉?瘥?
 		// Normalize ICE and EV energy into separate display and progress values.
 		// For EVs, fuelLevel is treated as remaining kWh. The fixed 60 kWh
 		// reference is only a visual scale because GT7 does not expose capacity.
@@ -869,23 +843,23 @@ public:
 		const bool nextFuelValueValid = validEvFuel || validIceFuel;
 		const String nextFuelLabel = detectedEV ? "EV" : "FUEL";
 
-		if (fuelIsEV != detectedEV || fuelValueValid != nextFuelValueValid)
+		if (state.fuelIsEV != detectedEV || state.fuelValueValid != nextFuelValueValid)
 		{
 			derivedMetrics.fuel.reset();
-			if (fuelLabel != nextFuelLabel)
+			if (state.fuelLabel != nextFuelLabel)
 				forceUpdate = true;
 		}
 
-		fuelIsEV = detectedEV;
-		fuelValueValid = nextFuelValueValid;
-		fuelLabel = nextFuelLabel;
+		state.fuelIsEV = detectedEV;
+		state.fuelValueValid = nextFuelValueValid;
+		state.fuelLabel = nextFuelLabel;
 
 		if (validEvFuel)
 		{
 			// GT7 updates EV energy in coarse steps. A whole-number display keeps
 			// every theme compact and avoids implying unavailable precision.
-			fuelDisplayValue = String(data.fuelLevel, 0);
-			fuelProgressPercent = constrain(
+			state.fuelDisplayValue = String(data.fuelLevel, 0);
+			state.fuelProgressPercent = constrain(
 				static_cast<int>(lroundf(
 					data.fuelLevel / EV_VISUAL_FULL_KWH * 100.0f)),
 				0,
@@ -897,27 +871,27 @@ public:
 				(data.fuelLevel / data.fuelCapacity) * 100.0f,
 				0.0f,
 				100.0f);
-			fuelDisplayValue = String(fuelPercent, 0);
-			fuelProgressPercent = constrain(
+			state.fuelDisplayValue = String(fuelPercent, 0);
+			state.fuelProgressPercent = constrain(
 				static_cast<int>(lroundf(fuelPercent)), 0, 100);
 		}
 		else
 		{
-			fuelDisplayValue = "--";
-			fuelProgressPercent = 100;
+			state.fuelDisplayValue = "--";
+			state.fuelProgressPercent = 100;
 		}
 
 		// Keep legacy fields synchronized for existing protocol helpers.
-		brakeBias = fuelDisplayValue;
-		fuelAlertActive = String(fuelProgressPercent);
+		state.brakeBias = state.fuelDisplayValue;
+		state.fuelAlertActive = String(state.fuelProgressPercent);
 
 		for (int tyreIndex = 0; tyreIndex < 4; tyreIndex++)
 		{
-			tyreTemperatures[tyreIndex] = data.tyreTemp[tyreIndex];
+			state.tyreTemperatures[tyreIndex] = data.tyreTemp[tyreIndex];
 		}
 
-		// 由獨立 library 估算剩餘油量圈數。
-		// 注意：GT7FuelEstimator 接收的是公升，不是百分比。
+		// ?梁蝡?library 隡啁??拚?瘝寥????
+		// 瘜冽?嚗T7FuelEstimator ?交??砍?嚗??舐????
 		if (validIceFuel)
 			derivedMetrics.fuel.update(data.fuelLevel, currentLap);
 
@@ -925,44 +899,46 @@ public:
 			? derivedMetrics.fuel.remainingLaps()
 			: -1.0f;
 
-		if (!fuelIsEV && estimatedFuelLaps >= 0.0f)
+		if (!state.fuelIsEV && estimatedFuelLaps >= 0.0f)
 		{
-			tyrePressureFrontLeft = String(estimatedFuelLaps, 1);
+			state.tyrePressureFrontLeft = String(estimatedFuelLaps, 1);
 		}
 		else
 		{
-			tyrePressureFrontLeft = "--";
+			state.tyrePressureFrontLeft = "--";
 		}
 
-		// 油門、煞車：UDP 範圍 0～255，轉為百分比
+		// 瘝寥???頠?UDP 蝭? 0嚚?55嚗??箇??
 		const int throttlePercent =
 			constrain(static_cast<int>(data.throttle * 100.0f / 255.0f), 0, 100);
 
 		const int brakePercent =
 			constrain(static_cast<int>(data.brake * 100.0f / 255.0f), 0, 100);
 
-		tcLevel = String(throttlePercent);
-		absLevel = String(brakePercent);
+		state.tcLevel = String(throttlePercent);
+		state.absLevel = String(brakePercent);
 		// GT7 exposes both driver pedal position and the filtered output actually
 		// applied by the simulation (after traction/ABS intervention).
-		tcFilteredLevel = String(constrain(
+		state.tcFilteredLevel = String(constrain(
 			static_cast<int>(data.throttleFiltered * 100.0f / 255.0f), 0, 100));
-		absFilteredLevel = String(constrain(
+		state.absFilteredLevel = String(constrain(
 			static_cast<int>(data.brakeFiltered * 100.0f / 255.0f), 0, 100));
 
 		const uint16_t flags = static_cast<uint16_t>(data.flags);
-		revLimitAlertActive =
+		state.revLimitAlertActive =
 			(flags & static_cast<uint16_t>(SimulatorFlags::RevLimiterBlinkAlertActive)) != 0;
 
-		// GT7 flags bit 0：車輛目前位於賽道／駕駛畫面中。
-		// 回到選單、離開賽道或載入畫面時會變成 false。
-		gt7CarOnTrack = (flags & (1U << 0)) != 0;
+		// GT7 flags bit 0嚗?頛???潸魚??擏??恍銝准?
+		// ??詨??魚??頛?恍??霈? false??
+        gt7CarOnTrack = (flags & (1U << 0)) != 0;
+        telemetry.gt7.received = true; telemetry.gt7.time = millis(); telemetry.gt7.running = gt7CarOnTrack;
+        state.gameRunning = gt7CarOnTrack ? "True" : "False";
 
 		const bool tcsIsActive = (flags & (1U << 11)) != 0;
 
-		tcActive = tcsIsActive ? "True" : "False";
+		state.tcActive = tcsIsActive ? "True" : "False";
 
-		// GT7 沒有直接提供 ABS Active，使用四輪角速度與實際輪胎半徑估算。
+		// GT7 瘝??湔?? ABS Active嚗蝙?典?頛芾??漲?祕?憚??敺摯蝞?
 		derivedMetrics.abs.update(
 			data.speed * 3.6f,
 			static_cast<float>(brakePercent),
@@ -970,256 +946,226 @@ public:
 			data.tyreRadius,
 			millis());
 
-		absActive = derivedMetrics.abs.isActive()
+		state.absActive = derivedMetrics.abs.isActive()
 						? "True"
 						: "False";
 
-		isTCCutNull = "True";
-		tcTcCut = "0";
-		brake = "0";
-		lapInvalidated = "False";
+		state.isTCCutNull = "True";
+		state.tcTcCut = "0";
+		state.brake = "0";
+		state.lapInvalidated = "False";
 
 		return true;
 	}
 
 #endif
 
-	void read()
-	{
-#if !INCLUDE_GT7_WIFI
-
-		// 1～9：主要行車及圈速資料
-		speed = FlowSerialReadStringUntil(';').toInt();
-		gear = FlowSerialReadStringUntil(';');
-		rpmPercent = FlowSerialReadStringUntil(';').toInt();
-		rpmRedLineSetting = FlowSerialReadStringUntil(';').toInt();
-
-		currentLapTime = FlowSerialReadStringUntil(';');
-		lastLapTime = FlowSerialReadStringUntil(';');
-		bestLapTime = FlowSerialReadStringUntil(';');
-
-		sessionBestLiveDeltaSeconds =
-			FlowSerialReadStringUntil(';');
-
-		sessionBestLiveDeltaProgressSeconds =
-			FlowSerialReadStringUntil(';');
-
-		// Delta 欄改為上一圈－最佳圈；仍讀取舊欄位以維持 Protocol 相容。
-		sessionBestLiveDeltaSeconds = formatLastBestDifference(
-			parseLapTimeStringMs(lastLapTime),
-			parseLapTimeStringMs(bestLapTime));
-
-		// 10：預估剩餘油量圈數
-		tyrePressureFrontLeft =
-			FlowSerialReadStringUntil(';');
-
-		// 11：起跑位置／排位位置
-		tyrePressureFrontRight =
-			FlowSerialReadStringUntil(';');
-
-		// 12：目前圈數／總圈數，例如 3/10
-		tyrePressureRearLeft =
-			FlowSerialReadStringUntil(';');
-
-		// 13：低油量警示
-		fuelAlertActive =
-			FlowSerialReadStringUntil(';');
-
-		// 14：油門百分比
-		tcLevel =
-			FlowSerialReadStringUntil(';');
-
-		// 15：TC 是否介入
-		tcActive =
-			FlowSerialReadStringUntil(';');
-
-		// 16：煞車百分比
-		absLevel =
-			FlowSerialReadStringUntil(';');
-		// SimHub's existing protocol has no separate filtered pedal channels.
-		// Mirror the input so the dual-layer renderer remains backward compatible.
-		tcFilteredLevel = tcLevel;
-		absFilteredLevel = absLevel;
-
-		// 17：ABS 是否介入
-		absActive =
-			FlowSerialReadStringUntil(';');
-
-		// 18：固定為 True
-		isTCCutNull =
-			FlowSerialReadStringUntil(';');
-
-		// 19：保留欄位，固定為 0
-		tcTcCut =
-			FlowSerialReadStringUntil(';');
-
-		// 20：剩餘油量百分比
-		brakeBias =
-			FlowSerialReadStringUntil(';');
-		fuelIsEV = false;
-		fuelValueValid = brakeBias != "--" && brakeBias.length() > 0;
-		fuelLabel = "FUEL";
-		fuelDisplayValue = brakeBias;
-		fuelProgressPercent = fuelValueValid
-			? constrain(static_cast<int>(lroundf(fuelAlertActive.toFloat())), 0, 100)
-			: 100;
-
-		// 21：保留欄位，固定為 0
-		brake =
-			FlowSerialReadStringUntil(';');
-
-		// 22：本圈是否無效
-		lapInvalidated =
-			FlowSerialReadStringUntil(';');
-
-		// 23：SimHub 是否正在接收遊戲資料
-		gameRunning =
-			FlowSerialReadStringUntil(';');
-
-		// 清除可能存在的空白、\r
-		gameRunning.trim();
-
-		// Protocol 最後一欄也有分號，因此再讀掉封包結尾的換行
-		FlowSerialReadStringUntil('\n');
-#endif
-		const bool isGameRunning =
-			gameRunning == "True" ||
-			gameRunning == "true" ||
-			gameRunning == "TRUE" ||
-			gameRunning == "1";
-
-		/*
-		 * 只有狀態真的從 False -> True，
-		 * 才視為 GT7 新的一次啟動。
-		 */
-		bool gameJustStarted = false;
-
-		if (gameRunningInitialized)
-		{
-			gameJustStarted =
-				!previousGameRunning &&
-				isGameRunning;
-		}
-		else
-		{
-			// 第一筆資料只用來建立初始狀態
-			gameRunningInitialized = true;
-		}
-
-		/*
-		 * GT7 從未執行變成執行：
-		 * 無論之前是自動或手動關屏，都自動亮起。
-		 */
-		if (gameJustStarted)
-		{
-            resetLapDifference();
-
-			screenSleeping = false;
-			screenOffByUser = false;
-
-			fadeScreenOn();
-
-			forceUpdate = true;
-			gameStoppedTimerStarted = false;
-		}
-
-		if (isGameRunning)
-		{
-			/*
-			 * 遊戲持續執行時，只取消自動休眠倒數。
-			 * 不直接開背光，避免手動關屏後馬上又亮。
-			 */
-			gameStoppedTimerStarted = false;
-		}
-		else
-		{
-			/*
-			 * GT7 未執行時開始五分鐘倒數。
-			 */
-			if (!gameStoppedTimerStarted)
-			{
-				gameStoppedTimerStarted = true;
-				gameStoppedTime = millis();
-			}
-		}
-
-		// 最後再保存本次狀態，供下一筆資料比較
-		previousGameRunning = isGameRunning;
-	}
-
-#if INCLUDE_GT7_WIFI
-	void updateGT7GameState()
-	{
-		const bool telemetryIsAlive =
-			lastGT7PacketTime != 0 &&
-			millis() - lastGT7PacketTime < RESET_WAITING_TIME * 1000;
-
-		// 不只要求 UDP 還活著，也要求車輛真的在賽道上。
-		// 因此離開賽道但 GT7 仍持續送封包時，也會切回等待畫面。
-		const bool isGameRunning =
-			telemetryIsAlive && gt7CarOnTrack;
-
-		bool gameJustStarted = false;
-
-		if (gameRunningInitialized)
-		{
-			gameJustStarted =
-				!previousGameRunning &&
-				isGameRunning;
-		}
-		else
-		{
-			gameRunningInitialized = true;
-
-			// 開機時 GT7 已經在執行，也直接亮屏
-			gameJustStarted = isGameRunning;
-		}
-
-		if (gameJustStarted)
-		{
-            resetLapDifference();
-			screenSleeping = false;
-			screenOffByUser = false;
-
-			fadeScreenOn();
-
-			forceUpdate = true;
-			gameStoppedTimerStarted = false;
-		}
-
-		if (isGameRunning)
-		{
-			gameStoppedTimerStarted = false;
-		}
-		else if (!gameStoppedTimerStarted)
-		{
-			gameStoppedTimerStarted = true;
-			gameStoppedTime = millis();
-		}
-
-		previousGameRunning = isGameRunning;
-	}
-
-#endif
+    const char *sourceName() const {
+        return telemetry.active == TelemetrySource::GT7 ? "GT7 Wi-Fi" : telemetry.active == TelemetrySource::SimHub ? "SimHub USB" : "Waiting";
+    }
+    TelemetryMode telemetryMode() const { return telemetry.mode; }
+    bool needsFirstSetup() const {
+        return telemetry.mode == TelemetryMode::GT7 && !wifiConfigured;
+    }
+    bool takeNetworkChange() { bool v = networkChanged; networkChanged = false; return v; }
+    bool takeWifiStopRequest() { bool v = wifiStopRequested; wifiStopRequested = false; return v; }
+    void networkState(const String &status, bool portal, bool connected, bool configured = false) {
+        // Wi-Fi is intentionally powered off in SimHub mode. In that state
+        // esp_wifi_get_config cannot report the credentials that remain saved
+        // in flash, so a false status must not erase our cached result.
+        if (telemetry.mode == TelemetryMode::GT7 || configured)
+            wifiConfigured = configured;
+        if (connected && settingsScreen == SettingsScreen::WifiSettings) {
+            if (gt7SelectionPending) selectConnection(TelemetryMode::GT7);
+            else closeSettings();
+        }
+        if (networkStatus != status || wifiPortalActive != portal) {
+            networkStatus = status; wifiPortalActive = portal; connectingScreenActive = false;
+        }
+    }
+    void initializeTelemetry() {
+        WiFi.mode(WIFI_STA);
+        const bool hasSavedWifi = dashboardHasSavedWifi();
+        wifiConfigured = hasSavedWifi;
+        WiFi.mode(WIFI_OFF);
+        uint8_t storedConnection = 0;
+        if (dashboardPreferencesReady)
+            storedConnection = dashboardPreferences.getUChar("connection", 0);
+        // Existing dual-source builds have no explicit connection choice.
+        // Run the new onboarding from Touch Setup so migration follows the
+        // same deterministic path as a fresh device.
+        if (storedConnection == 0) touchSetupRequired = true;
+        telemetry.mode = storedConnection == static_cast<uint8_t>(TelemetryMode::GT7)
+            ? TelemetryMode::GT7 : storedConnection == static_cast<uint8_t>(TelemetryMode::SimHub)
+            ? TelemetryMode::SimHub : TelemetryMode::Auto;
+        firstRun = touchSetupRequired || telemetry.mode == TelemetryMode::Auto;
+        if (touchSetupRequired) showSettingsScreen(SettingsScreen::InitialTouch);
+        else if (telemetry.mode == TelemetryMode::Auto)
+            showSettingsScreen(SettingsScreen::ConnectionChoice);
+        else if (telemetry.mode == TelemetryMode::GT7 && !hasSavedWifi)
+            showSettingsScreen(SettingsScreen::WifiSettings);
+        networkChanged = true;
+    }
+    void setGT7TransportReady(bool ready) { gt7TransportReady = ready; }
+    void selectConnection(TelemetryMode mode) {
+        gt7SelectionPending = false;
+        telemetry.mode = mode;
+        telemetry.active = TelemetrySource::None;
+        simHubGearFilter.reset();
+        firstRun = false;
+        if (dashboardPreferencesReady)
+            dashboardPreferences.putUChar("connection", static_cast<uint8_t>(mode));
+        networkChanged = true;
+        connectingScreenActive = false;
+        forceUpdate = true;
+        if (mode == TelemetryMode::GT7 && !wifiConfigured)
+            showSettingsScreen(SettingsScreen::WifiSettings);
+        else closeSettings();
+    }
+    void requestConnection(TelemetryMode mode, SettingsScreen returnScreen) {
+        if (mode != TelemetryMode::GT7 || wifiConfigured) {
+            selectConnection(mode); return;
+        }
+        gt7SelectionPending = true;
+        pendingSelectionWasFirstRun = firstRun;
+        modeBeforePendingGT7 = telemetry.mode;
+        wifiReturnScreen = returnScreen;
+        telemetry.mode = TelemetryMode::GT7;
+        telemetry.active = TelemetrySource::None;
+        networkChanged = true;
+        connectingScreenActive = false;
+        forceUpdate = true;
+        showSettingsScreen(SettingsScreen::WifiSettings);
+    }
+    void cancelPendingGT7() {
+        if (!gt7SelectionPending) {
+            showSettingsScreen(firstRun ? SettingsScreen::ConnectionChoice : SettingsScreen::DeviceSettings);
+            return;
+        }
+        telemetry.mode = modeBeforePendingGT7;
+        firstRun = pendingSelectionWasFirstRun;
+        gt7SelectionPending = false;
+        wifiStopRequested = true;
+        networkChanged = true;
+        if (wifiReturnScreen == SettingsScreen::Closed) closeSettings();
+        else showSettingsScreen(wifiReturnScreen);
+    }
+    void noteUsbCommand() { if (!usbSeen) connectingScreenActive = false; usbSeen = true; lastUsbCommandTime = millis(); }
+    bool customReadPending() const { return receivingCustom; }
+    void read() {
+        receivingCustom = true; customLength = 0; customOverflow = false;
+        customStarted = customLastByte = millis();
+    }
+    void pollCustomProtocol() {
+        if (!receivingCustom) return;
+        unsigned budget = 512;
+        while (budget-- && FlowSerialAvailable() > 0) {
+            const int c = FlowSerialTimedRead();
+            if (c < 0) break;
+            customLastByte = millis();
+            if (c == '\n') {
+                customLine[customLength] = 0; receivingCustom = false;
+                const bool error = customOverflow || !acceptSimHubFrame();
+                if (customProtocolError != error) connectingScreenActive = false;
+                customProtocolError = error;
+                FlowSerialWrite(0x15); return;
+            }
+            if (c == '\r') continue;
+            if (c < 32 || c > 126 || customLength + 1 >= sizeof(customLine)) customOverflow = true;
+            else if (!customOverflow) customLine[customLength++] = static_cast<char>(c);
+        }
+        if (uint32_t(millis() - customLastByte) > 300 || uint32_t(millis() - customStarted) > 1500) {
+            receivingCustom = false; customProtocolError = true; connectingScreenActive = false;
+            FlowSerialWrite(0x15);
+        }
+    }
+    bool acceptSimHubFrame() {
+        SimHubProtocol::Frame frame;
+        if (!SimHubProtocol::parse(customLine, frame)) return false;
+        const uint32_t sequence = static_cast<uint32_t>(frame.values[1]);
+        if (haveSimHubSequence && sequence == lastSimHubSequence) return true;
+        lastSimHubSequence = sequence; haveSimHubSequence = true;
+        // Legacy releases stored Auto (0). Continue accepting SimHub frames in
+        // that mode so upgrading does not leave the dashboard waiting forever.
+        if (firstRun || telemetry.mode == TelemetryMode::GT7) return true;
+        DashboardState next;
+        const auto text = [&](unsigned i) { return String(frame.fields[i]); };
+        const auto integer = [&](unsigned i) { return isfinite(frame.values[i]) ? static_cast<int>(lround(frame.values[i])) : 0; };
+        // GameRunning is false for some SimHub game plugins even while their
+        // live telemetry is moving. Speed or RPM is sufficient evidence here.
+        const bool simHubRunning = frame.values[2] == 1 ||
+            (isfinite(frame.values[3]) && frame.values[3] > 0) ||
+            (isfinite(frame.values[5]) && frame.values[5] > 0);
+        next.gameRunning = simHubRunning ? "True" : "False";
+        next.speed = isfinite(frame.values[3]) ? String(integer(3)) : "--";
+        next.gear = simHubGearFilter.apply(frame.fields[4], millis());
+        next.engineRpm = isfinite(frame.values[5]) ? integer(5) : -1;
+        next.rpmPercent = integer(6); next.rpmRedLineSetting = isfinite(frame.values[7]) ? integer(7) : 90;
+        next.rpmAlertRangeValid = isfinite(frame.values[6]) && isfinite(frame.values[7]) && frame.values[7] > 0;
+        next.revLimitAlertActive = next.rpmAlertRangeValid && next.rpmPercent >= next.rpmRedLineSetting;
+        next.currentLapTime = text(8); next.lastLapTime = text(9); next.bestLapTime = text(10);
+        next.sessionBestLiveDeltaSeconds = text(9) == "--" || text(10) == "--" ? "--" :
+            formatLastBestDifference(parseLapTimeStringMs(text(9)), parseLapTimeStringMs(text(10)));
+        next.tyrePressureFrontLeft = text(11); next.tyrePressureFrontRight = text(12);
+        next.tyrePressureRearLeft = text(13) + "/" + text(14);
+        next.fuelValueValid = isfinite(frame.values[15]);
+        next.fuelDisplayValue = next.fuelValueValid ? String(integer(15)) : "--";
+        next.fuelProgressPercent = next.fuelValueValid ? integer(15) : 100;
+        next.brakeBias = next.fuelDisplayValue; next.fuelAlertActive = String(next.fuelProgressPercent);
+        next.tcLevel = next.tcFilteredLevel = text(16); next.absLevel = next.absFilteredLevel = text(17);
+        next.tcActive = text(18); next.absActive = text(19); next.lapInvalidated = frame.values[20] == 1 ? "True" : frame.values[20] == 0 ? "False" : "--";
+        for (unsigned i = 0; i < 4; ++i) next.tyreTemperatures[i] = frame.values[21 + i];
+        simhubState = next; simhubDirty = true;
+        telemetry.simhub.received = true; telemetry.simhub.time = millis(); telemetry.simhub.running = simHubRunning;
+        return true;
+    }
+    void applyTelemetryState(const DashboardState &next) {
+        // Preserve renderer animation caches across telemetry updates.
+        DashboardState &state = static_cast<DashboardState &>(*this);
+        const String oldGear = state.prev_gear; const int oldRpm = state.prev_rpmPercent;
+        const bool oldRev = state.revLimitAlertWasActive, oldPulse = state.rpmPulseWasActive;
+        const uint8_t oldMix = state.lastRpmPulseWhiteMix;
+        const uint32_t oldFrame = state.lastRpmPulseFrameTime, oldStart = state.rpmPulseStartTime;
+        state = next; state.prev_gear = oldGear; state.prev_rpmPercent = oldRpm;
+        state.revLimitAlertWasActive = oldRev; state.rpmPulseWasActive = oldPulse;
+        state.lastRpmPulseWhiteMix = oldMix; state.lastRpmPulseFrameTime = oldFrame; state.rpmPulseStartTime = oldStart;
+    }
+    void updateTelemetry() {
+        uint32_t now = millis();
+        if (!firstRun && gt7TransportReady && telemetry.mode != TelemetryMode::SimHub && WiFi.status() == WL_CONNECTED) {
+            static uint32_t lastHeartbeat = 0;
+            if (uint32_t(now - lastHeartbeat) >= 500) { lastHeartbeat = now; gt7Telem.sendHeartbeat(); }
+            gt7Dirty = readGT7Wifi(gt7State) || gt7Dirty;
+        }
+        // Packet parsing timestamps the sample; compare against a time captured
+        // afterwards so a newly arrived frame never looks uint32-wrap stale.
+        now = millis();
+        const TelemetrySource before = telemetry.active;
+        const TelemetrySource selected = firstRun ? TelemetrySource::None : telemetry.update(now);
+        if (before != selected) {
+            resetLapDifference(); derivedMetrics.reset();
+            static_cast<DashboardState &>(*this) = DashboardState();
+            if (settingsScreen == SettingsScreen::Closed) invalidateDashboardRenderer();
+            else { connectingScreenActive = false; forceUpdate = true; }
+        }
+        if (selected == TelemetrySource::GT7 && (gt7Dirty || before != selected)) applyTelemetryState(gt7State);
+        if (selected == TelemetrySource::SimHub && (simhubDirty || before != selected)) applyTelemetryState(simhubState);
+        gt7Dirty = simhubDirty = false;
+        const bool running = selected == TelemetrySource::GT7 ? telemetry.gt7.running : selected == TelemetrySource::SimHub ? telemetry.simhub.running : false;
+        gameRunning = running ? "True" : "False";
+        if (running && !previousGameRunning) { screenSleeping = false; screenOffByUser = false; fadeScreenOn(); forceUpdate = true; }
+        if (running) gameStoppedTimerStarted = false;
+        else if (!gameStoppedTimerStarted) { gameStoppedTimerStarted = true; gameStoppedTime = now; }
+        previousGameRunning = running;
+    }
 
 	void loop()
 	{
-#if INCLUDE_GT7_WIFI
-		static uint32_t lastHeartbeatTime = 0;
-		const uint32_t now = millis();
-		// GT7 需要持續收到 heartbeat 才會繼續傳送遙測資料。
-		if (now - lastHeartbeatTime >= 500)
-		{
-			lastHeartbeatTime = now;
-			gt7Telem.sendHeartbeat();
-		}
+        updateTelemetry();
 
-		readGT7Wifi();
-		updateGT7GameState();
-#endif
 
 		/*
-		 * GT7 停止五分鐘，自動關閉背光。
+		 * GT7 ?迫鈭????芸???????
 		 */
 		if (!screenSleeping &&
 			gameStoppedTimerStarted &&
@@ -1240,9 +1186,17 @@ public:
 
 		// Keep reading touch while asleep so a tap can wake the display and a
 		// long press can open Settings.
-		readTouch();
+        readTouch();
+        if (settingsScreen == SettingsScreen::WifiSettings &&
+            settingsPressedButton < 0 && millis() - settingsStatusRefresh > 1000) {
+            settingsStatusRefresh = millis();
+            const String currentStatus = String(sourceName()) + ":" + networkStatus;
+            if (prevData["connectionStatus"] != currentStatus) {
+                prevData["connectionStatus"] = currentStatus; drawSettingsScreen();
+            }
+        }
 
-		// 確認畫面開啟時，不讓 Dashboard 或 Connecting 畫面蓋回來。
+		// 蝣箄??恍????銝? Dashboard ??Connecting ?恍??靘?
 		if (settingsScreen != SettingsScreen::Closed)
 		{
 			return;
@@ -1253,14 +1207,14 @@ public:
 			return;
 		}
 
-		// 還沒收到 GT7 Telemetry 時顯示等待畫面。
+		// ???嗅 GT7 Telemetry ?＊蝷箇?敺?Ｕ?
 		if (!previousGameRunning)
 		{
 			updateConnectingScreen();
 			return;
 		}
 
-		// 從 Connecting 切回主儀表時，完整重畫一次。
+		// 敺?Connecting ??銝餃?銵冽?嚗??湧??思?甈～?
 		if (connectingScreenActive)
 		{
 			connectingScreenActive = false;
@@ -1408,29 +1362,6 @@ public:
 		prevData[cacheKey] = liveState;
 	}
 
-	void drawTouchCalibrationHint(bool confirm)
-	{
-		const char *label = confirm ? "TOUCH AGAIN" : "TOUCH SETUP";
-		const uint16_t textColor = confirm
-			? tft.color565(218, 111, 148)
-			: tft.color565(105, 105, 105);
-		constexpr int iconRadius = 4;
-		constexpr int iconGap = 5;
-		tft.setTextFont(1);
-		const int textWidth = tft.textWidth(label);
-		const int groupWidth = iconRadius * 2 + iconGap + textWidth;
-		const int groupX = X_CENTER - groupWidth / 2;
-		const int iconX = groupX + iconRadius - 2;
-		const int textX = groupX + iconRadius * 2 + iconGap;
-
-		tft.fillRect(62, 4, 196, 29, TFT_BLACK);
-		tft.drawCircle(iconX, 17, iconRadius, textColor);
-		tft.fillCircle(iconX, 17, 1, textColor);
-		tft.setTextDatum(ML_DATUM);
-		tft.setTextColor(textColor, TFT_BLACK);
-		tft.drawString(label, textX, 18, 1);
-	}
-
 	void drawConnectingScreenBase()
 	{
 		tft.fillScreen(TFT_BLACK);
@@ -1440,7 +1371,7 @@ public:
 
 		tft.setTextColor(TFT_WHITE, TFT_BLACK);
 		tft.drawCentreString(
-			"GT7 DASH",
+			telemetry.mode == TelemetryMode::SimHub ? "SIMHUB DASH" : "GT7 DASH",
 			SCREEN_WIDTH / 2,
 			75,
 			4);
@@ -1449,15 +1380,20 @@ public:
 			tft.color565(120, 120, 120),
 			TFT_BLACK);
 
-		// The asymmetric top-centre label lets a mismatched touch rotation be
-		// inferred after two matching intentional taps while telemetry is idle.
-		drawTouchCalibrationHint(false);
-
 		tft.drawCentreString(
-			"Waiting for Telemetry",
+			telemetry.mode == TelemetryMode::SimHub ? "Waiting for SimHub" : "Waiting for GT7",
 			SCREEN_WIDTH / 2,
 			120,
 			2);
+
+        const bool usbActive = usbSeen && uint32_t(millis() - lastUsbCommandTime) < 5000;
+        const String hint = telemetry.mode == TelemetryMode::SimHub
+            ? (customProtocolError ? "Check Custom Protocol (DSH1)" :
+                usbActive && !telemetry.simhub.alive(millis()) ? "USB linked: set Custom Protocol" :
+                "Connect USB and start SimHub")
+            : (wifiConfigured ? networkStatus : "Wi-Fi setup required");
+        tft.setTextColor(tft.color565(120, 120, 120), TFT_BLACK);
+        tft.drawCentreString(hint, X_CENTER, 183, 1);
 
 		const int barWidth = 110;
 		const int barHeight = 3;
@@ -1471,17 +1407,47 @@ public:
 			barHeight,
 			tft.color565(28, 28, 28));
 
-		tft.drawCentreString(
-			"Tap for settings",
-			SCREEN_WIDTH / 2,
-			SCREEN_HEIGHT - 26,
-			1);
+		drawWaitingConnectionSwitch(false);
 
 		tft.drawCentreString(
 			String("v") + GT7_DASH_VERSION + "  |  by caa1211",
 			SCREEN_WIDTH / 2,
 			SCREEN_HEIGHT - 12,
 			1);
+	}
+
+	void drawWaitingConnectionSwitch(bool pressed)
+	{
+		const int x = 80, y = 24, width = 160, height = 25;
+		const uint16_t fill = pressed
+			? tft.color565(18, 74, 104)
+			: tft.color565(13, 15, 18);
+		const uint16_t border = pressed
+			? tft.color565(80, 180, 220)
+			: tft.color565(58, 62, 68);
+		tft.fillRoundRect(x, y, width, height, 7, fill);
+		tft.drawRoundRect(x, y, width, height, 7, border);
+		tft.setTextDatum(MC_DATUM);
+		tft.setTextColor(pressed ? TFT_WHITE : tft.color565(125, 130, 136), fill);
+		tft.drawString(
+			telemetry.mode == TelemetryMode::SimHub
+				? "SWITCH TO DIRECT GT7"
+				: "SWITCH TO SIMHUB USB",
+			x + width / 2, y + height / 2, 1);
+	}
+
+	bool waitingConnectionSwitchAtTouch() const
+	{
+		// Keep the control visually quiet while providing a finger-sized target.
+		return touchInside(50, 12, 220, 48);
+	}
+
+	void switchConnectionFromWaiting()
+	{
+		if (telemetry.mode == TelemetryMode::SimHub)
+			requestConnection(TelemetryMode::GT7, SettingsScreen::Closed);
+		else
+			selectConnection(TelemetryMode::SimHub);
 	}
 
 	void drawConnectingBar()
@@ -1492,7 +1458,7 @@ public:
 		const int barX = (SCREEN_WIDTH - barWidth) / 2;
 		const int barY = 162;
 
-		// 每次先重畫整條深灰底
+		// 瘥活???急璇楛?啣?
 		tft.fillRect(
 			barX,
 			barY,
@@ -1502,17 +1468,17 @@ public:
 
 		const int highlightWidth = 32;
 
-		// 讓流光可以從左側外面進入，再從右側離開
+		// 霈??隞亙?撌血憭?脣嚗?敺?湧??
 		const int travelWidth = barWidth + highlightWidth * 2;
 		const int highlightX =
 			(connectingAnimationStep % travelWidth) - highlightWidth;
 
 		/*
-		 * 將亮區切成多段灰階：
+		 * 撠漁???憭挾?圈?嚗?
 		 *
-		 * 暗 → 灰 → 亮灰 → 灰 → 暗
+		 * ????????鈭桃 ????????
 		 *
-		 * 因為高度只有 3px，看起來會像柔和的流光。
+		 * ?擃漲?芣? 3px嚗?韏瑚?????????
 		 */
 		const int segmentCount = 16;
 		const int segmentWidth =
@@ -1523,11 +1489,11 @@ public:
 			const float position =
 				(float)i / (segmentCount - 1);
 
-			// 三角形亮度，中央最亮、兩側漸暗
+			// 銝?敶Ｖ漁摨佗?銝剖亢?鈭柴?湔撓??
 			float brightness =
 				1.0f - fabsf(position * 2.0f - 1.0f);
 
-			// 亮度範圍約 45～190，避免白得太搶眼
+			// 鈭桀漲蝭?蝝?45嚚?90嚗?敺云?嗥
 			uint8_t gray =
 				45 + (uint8_t)(brightness * 145);
 
@@ -1536,14 +1502,14 @@ public:
 
 			int drawWidth = segmentWidth + 1;
 
-			// 裁切左邊界
+			// 鋆?撌阡???
 			if (segmentX < barX)
 			{
 				drawWidth -= barX - segmentX;
 				segmentX = barX;
 			}
 
-			// 裁切右邊界
+			// 鋆??喲???
 			if (segmentX + drawWidth > barX + barWidth)
 			{
 				drawWidth =
@@ -1575,7 +1541,7 @@ public:
 
 		const unsigned long now = millis();
 
-		// 數值越大，動畫移動越慢
+		// ?詨潸?憭改??蝘餃?頞
 		if (now - lastConnectingAnimationTime >= 65)
 		{
 			lastConnectingAnimationTime = now;
@@ -1607,6 +1573,7 @@ public:
 
 	int32_t previousBestLapMs = -1;
 	int32_t lastProcessedLapMs = -1;
+    String gt7LapDifference = "+0.000";
 
 	String updateLastBestDifference(
 		int32_t lastLapMs,
@@ -1617,10 +1584,10 @@ public:
 			return "+0.000";
 		}
 
-		// 同一個上一圈可能每個封包重複傳送，只處理一次。
+		// ????銝??賣?????銴???芾???甈～?
 		if (lastLapMs == lastProcessedLapMs)
 		{
-			return sessionBestLiveDeltaSeconds;
+			return gt7LapDifference;
 		}
 
 		lastProcessedLapMs = lastLapMs;
@@ -1633,8 +1600,9 @@ public:
 				static_cast<float>(lastLapMs - previousBestLapMs) / 1000.0f);
 		}
 
-		// 本圈處理完後，才更新保存的最佳圈。
+		// ?砍???摰?嚗??湔靽???雿喳???
 		previousBestLapMs = bestLapMs;
+		gt7LapDifference = result;
 
 		return result;
 	}
@@ -1671,29 +1639,8 @@ public:
 
 	void drawDeviceBrightnessValue()
 	{
-		static LGFX_Sprite brightnessSprite(&tft);
-		static bool spriteCreated = false;
-		if (!spriteCreated)
-		{
-			brightnessSprite.setColorDepth(16);
-			spriteCreated = brightnessSprite.createSprite(116, 48) != nullptr;
-		}
-		if (spriteCreated)
-		{
-			brightnessSprite.fillSprite(TFT_BLACK);
-			brightnessSprite.setTextColor(TFT_WHITE, TFT_BLACK);
-			brightnessSprite.setTextDatum(MC_DATUM);
-			brightnessSprite.drawString(
-				String(userBrightnessPercent) + "%", 58, 24, 4);
-			brightnessSprite.pushSprite(102, 72);
-		}
-		else
-		{
-			tft.fillRect(102, 72, 116, 48, TFT_BLACK);
-			tft.setTextColor(TFT_WHITE, TFT_BLACK);
-			tft.setTextDatum(MC_DATUM);
-			tft.drawString(String(userBrightnessPercent) + "%", X_CENTER, 96, 4);
-		}
+		drawSettingsButton(80, 50, 160, 38,
+			String("BRIGHTNESS  ") + userBrightnessPercent + "%", false);
 	}
 
 	void clearThemePreviewRenderCache()
@@ -1798,21 +1745,49 @@ public:
 
 		tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
 		tft.drawString(
-			touchCalibrationVerified ? "Touch verified" : "Tap the target to verify",
+			touchCalibrationVerified ? "Touch verified" : "Tap the left target to verify",
 			X_CENTER, 59, 2);
 
 		const uint16_t targetColor = touchCalibrationVerified
 			? tft.color565(88, 190, 130)
 			: tft.color565(210, 82, 126);
-		tft.drawCircle(252, 104, 15, targetColor);
-		tft.drawCircle(252, 104, 7, targetColor);
-		tft.drawFastHLine(232, 104, 41, targetColor);
-		tft.drawFastVLine(252, 84, 41, targetColor);
+		tft.drawCircle(68, 104, 15, targetColor);
+		tft.drawCircle(68, 104, 7, targetColor);
+		tft.drawFastHLine(48, 104, 41, targetColor);
+		tft.drawFastVLine(68, 84, 41, targetColor);
 
-		drawSettingsButton(25, 169, 125, 50, "CANCEL", pressedButton == 1);
+		drawSettingsButton(25, 169, 125, 50,
+			touchSetupRequired ? "RETRY" : "CANCEL", pressedButton == 1);
 		drawSettingsButton(170, 169, 125, 50, "SAVE", pressedButton == 2,
 			touchCalibrationVerified);
 		tft.setTextDatum(TL_DATUM);
+	}
+
+	void drawWifiSetupQrCode()
+	{
+		static constexpr uint8_t QR_VERSION = 3;
+		static constexpr int QR_SCALE = 4;
+		static constexpr int QR_QUIET_MODULES = 4;
+		static constexpr int QR_X = 10;
+		static constexpr int QR_Y = 47;
+		uint8_t qrData[128] = {};
+		QRCode qr;
+		if (qrcode_initText(&qr, qrData, QR_VERSION, ECC_LOW,
+			"WIFI:T:nopass;S:GT7-DASH-SETUP;;") != 0) return;
+
+		const int outerSize = (qr.size + QR_QUIET_MODULES * 2) * QR_SCALE;
+		tft.fillRect(QR_X, QR_Y, outerSize, outerSize, TFT_WHITE);
+		for (uint8_t y = 0; y < qr.size; ++y)
+		{
+			for (uint8_t x = 0; x < qr.size; ++x)
+			{
+				if (!qrcode_getModule(&qr, x, y)) continue;
+				tft.fillRect(
+					QR_X + (x + QR_QUIET_MODULES) * QR_SCALE,
+					QR_Y + (y + QR_QUIET_MODULES) * QR_SCALE,
+					QR_SCALE, QR_SCALE, TFT_BLACK);
+			}
+		}
 	}
 
 	void drawSettingsScreen(int pressedButton = -1)
@@ -1829,6 +1804,46 @@ public:
 			drawSettingsButton(30, 113, 260, 48, "DEVICE SETTINGS", pressedButton == 1);
 			drawSettingsButton(30, 171, 260, 48, "BACK", pressedButton == 2);
 		}
+        else if (settingsScreen == SettingsScreen::InitialTouch) {
+            tft.setTextColor(TFT_WHITE, TFT_BLACK);
+            tft.drawString("TOUCH SETUP", X_CENTER, 34, 4);
+            tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+            tft.drawString("Tap the target to begin", X_CENTER, 70, 2);
+            const uint16_t color = tft.color565(210, 82, 126);
+            tft.drawCircle(252, 120, 18, color);
+            tft.drawCircle(252, 120, 8, color);
+            tft.drawFastHLine(228, 120, 49, color);
+            tft.drawFastVLine(252, 96, 49, color);
+            tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            tft.drawString("Required once before setup", X_CENTER, 188, 1);
+        }
+        else if (settingsScreen == SettingsScreen::ConnectionChoice) {
+            tft.setTextColor(TFT_WHITE, TFT_BLACK);
+            tft.drawString("CHOOSE CONNECTION", X_CENTER, 24, 4);
+            drawSettingsButton(25, 62, 270, 58, "DIRECT GT7", pressedButton == 0);
+            drawSettingsButton(25, 132, 270, 58, "SIMHUB USB", pressedButton == 1);
+            if (connectionChoiceCanCancel)
+                drawSettingsButton(105, 202, 110, 30, "BACK", pressedButton == 2);
+            else {
+                tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+                tft.drawString("You can change this later in Settings", X_CENTER, 218, 1);
+            }
+        }
+        else if (settingsScreen == SettingsScreen::WifiSettings) {
+            tft.setTextColor(TFT_WHITE, TFT_BLACK); tft.drawString("WI-FI SETUP", X_CENTER, 18, 4);
+            drawWifiSetupQrCode();
+            tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+            tft.drawString("Scan to join", 235, 53, 2);
+            tft.drawString("or connect manually", 235, 75, 1);
+            tft.drawString("Wi-Fi", 235, 94, 1);
+            tft.setTextColor(TFT_CYAN, TFT_BLACK);
+            tft.drawString("GT7-DASH-SETUP", 235, 116, 2);
+            tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+            tft.drawString("Then open", 235, 143, 1);
+            tft.setTextColor(TFT_WHITE, TFT_BLACK);
+            tft.drawString("192.168.4.1", 235, 164, 2);
+            drawSettingsButton(105, 204, 110, 28, "BACK", pressedButton == 0);
+        }
 		else if (settingsScreen == SettingsScreen::ThemeSelection)
 		{
 			renderThemePreview();
@@ -1837,21 +1852,25 @@ public:
 		{
 			tft.setTextColor(TFT_WHITE, TFT_BLACK);
 			tft.drawString("DEVICE SETTINGS", X_CENTER, 20, 4);
-			tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-			tft.drawString("BRIGHTNESS", X_CENTER, 53, 2);
-			drawSettingsButton(30, 72, 70, 48, "-", pressedButton == 0);
-			drawSettingsButton(220, 72, 70, 48, "+", pressedButton == 1);
+			drawSettingsButton(20, 50, 50, 38, "-", pressedButton == 0);
 			drawDeviceBrightnessValue();
-			drawSettingsButton(30, 132, 260, 38, "RESET WIFI", pressedButton == 2,
-				false, true);
-			drawSettingsButton(30, 182, 260, 38, "BACK", pressedButton == 3);
+			drawSettingsButton(250, 50, 50, 38, "+", pressedButton == 1);
+			tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+			tft.drawString("CONNECTION", X_CENTER, 101, 1);
+			drawSettingsButton(20, 111, 135, 38, "DIRECT GT7", pressedButton == 2,
+				telemetry.mode == TelemetryMode::GT7);
+			drawSettingsButton(165, 111, 135, 38, "SIMHUB USB", pressedButton == 3,
+				telemetry.mode == TelemetryMode::SimHub);
+			drawSettingsButton(20, 158, 280, 38, "RESET TO DEFAULT", pressedButton == 4, false, true);
+			drawSettingsButton(20, 204, 280, 28, "BACK", pressedButton == 5);
 		}
-		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		else if (settingsScreen == SettingsScreen::ResetConfirmation)
 		{
 			tft.setTextColor(TFT_WHITE, TFT_BLACK);
-			tft.drawString("Reset saved Wi-Fi?", X_CENTER, 60, 4);
+			tft.drawString("RESET TO DEFAULT?", X_CENTER, 48, 4);
 			tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-			tft.drawString("Device will restart", X_CENTER, 95, 2);
+			tft.drawString("All settings and Wi-Fi", X_CENTER, 86, 2);
+			tft.drawString("will be cleared", X_CENTER, 108, 2);
 			drawSettingsButton(25, 135, 120, 62, "CANCEL", pressedButton == 0);
 			drawSettingsButton(175, 135, 120, 62, "RESET", pressedButton == 1,
 				false, true);
@@ -1864,8 +1883,15 @@ public:
 		tft.setTextDatum(TL_DATUM);
 	}
 
-	void redrawSettingsButton(int button, bool pressed)
-	{
+    void redrawSettingsButton(int button, bool pressed)
+    {
+        if (settingsScreen == SettingsScreen::InitialTouch) return;
+        if (settingsScreen == SettingsScreen::ConnectionChoice) {
+            drawSettingsScreen(pressed ? button : -1); return;
+        }
+        if (settingsScreen == SettingsScreen::WifiSettings) {
+            drawSettingsButton(105, 204, 110, 28, "BACK", pressed); return;
+        }
 		if (settingsScreen == SettingsScreen::Main)
 		{
 			if (button == 0)
@@ -1883,16 +1909,21 @@ public:
 		else if (settingsScreen == SettingsScreen::DeviceSettings)
 		{
 			if (button == 0)
-				drawSettingsButton(30, 72, 70, 48, "-", pressed);
+				drawSettingsButton(20, 50, 50, 38, "-", pressed);
 			else if (button == 1)
-				drawSettingsButton(220, 72, 70, 48, "+", pressed);
+				drawSettingsButton(250, 50, 50, 38, "+", pressed);
 			else if (button == 2)
-				drawSettingsButton(30, 132, 260, 38, "RESET WIFI", pressed,
-					false, true);
+				drawSettingsButton(20, 111, 135, 38, "DIRECT GT7", pressed,
+					telemetry.mode == TelemetryMode::GT7);
 			else if (button == 3)
-				drawSettingsButton(30, 182, 260, 38, "BACK", pressed);
+				drawSettingsButton(165, 111, 135, 38, "SIMHUB USB", pressed,
+					telemetry.mode == TelemetryMode::SimHub);
+			else if (button == 4)
+				drawSettingsButton(20, 158, 280, 38, "RESET TO DEFAULT", pressed, false, true);
+			else if (button == 5)
+				drawSettingsButton(20, 204, 280, 28, "BACK", pressed);
 		}
-		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		else if (settingsScreen == SettingsScreen::ResetConfirmation)
 		{
 			if (button == 0)
 				drawSettingsButton(25, 135, 120, 62, "CANCEL", pressed);
@@ -1903,7 +1934,8 @@ public:
 		else if (settingsScreen == SettingsScreen::TouchCalibration)
 		{
 			if (button == 1)
-				drawSettingsButton(25, 169, 125, 50, "CANCEL", pressed);
+				drawSettingsButton(25, 169, 125, 50,
+					touchSetupRequired ? "RETRY" : "CANCEL", pressed);
 			else if (button == 2)
 				drawSettingsButton(170, 169, 125, 50, "SAVE", pressed,
 					touchCalibrationVerified);
@@ -1924,7 +1956,7 @@ public:
 			previewFullscreen = false;
 		}
 		settingsScreen = screen;
-		wifiResetConfirmOpen = screen == SettingsScreen::WifiResetConfirmation;
+		wifiResetConfirmOpen = screen == SettingsScreen::ResetConfirmation;
 		settingsPressedButton = -1;
 		settingsLastInteractionTime = millis();
 		drawSettingsScreen();
@@ -1937,10 +1969,12 @@ public:
 		wifiResetConfirmOpen = false;
 		settingsPressedButton = -1;
 		touchCalibrationVerified = false;
-		touchCalibrationEntryArmed = false;
-		touchCalibrationAwaitingSecondTap = false;
-		touchCalibrationFirstTapTime = 0;
 		pendingTouchRotation = touchRotation;
+		if (firstRun) {
+			if (touchSetupRequired) showSettingsScreen(SettingsScreen::InitialTouch);
+			else showSettingsScreen(SettingsScreen::ConnectionChoice);
+			return;
+		}
 		redrawAfterWifiResetDialog();
 	}
 
@@ -1948,18 +1982,19 @@ public:
 	{
 		pendingTouchRotation = candidate;
 		touchCalibrationVerified = false;
+		touchCalibrationReadyAt = millis() + 400;
 		showSettingsScreen(SettingsScreen::TouchCalibration);
 	}
 
 	void showWifiResetConfirm()
 	{
-		showSettingsScreen(SettingsScreen::WifiResetConfirmation);
+		showSettingsScreen(SettingsScreen::ResetConfirmation);
 	}
 
 #if 0
 	void showWifiResetConfirmLegacy()
 	{
-		// 即使原本處於暗屏，也要先亮起確認畫面。
+		// ?喃蝙????嚗?閬?鈭株絲蝣箄??恍??
 		screenSleeping = false;
 		screenOffByUser = false;
 		tft.setBrightness(normalBrightness());
@@ -1973,7 +2008,7 @@ public:
 		tft.drawString("Reset saved Wi-Fi?", SCREEN_WIDTH / 2, 60, 4);
 
 		tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-		tft.drawString("Device will restart", SCREEN_WIDTH / 2, 95, 2);
+		tft.drawString("Other settings will be kept", SCREEN_WIDTH / 2, 95, 2);
 
 		const int buttonY = 135;
 		const int buttonHeight = 62;
@@ -2006,7 +2041,7 @@ public:
 		tft.drawString("WI-FI RESET", SCREEN_WIDTH / 2, 90, 4);
 
 		tft.setTextColor(TFT_WHITE, TFT_BLACK);
-		tft.drawString("Restarting...", SCREEN_WIDTH / 2, 145, 2);
+		tft.drawString("Clearing saved network...", SCREEN_WIDTH / 2, 145, 2);
 
 		tft.setTextDatum(TL_DATUM);
 	}
@@ -2024,6 +2059,17 @@ public:
 
 	int settingsButtonAtTouch() const
 	{
+        if (settingsScreen == SettingsScreen::InitialTouch) return -1;
+        if (settingsScreen == SettingsScreen::ConnectionChoice) {
+            if (touchInside(25, 62, 270, 58)) return 0;
+            if (touchInside(25, 132, 270, 58)) return 1;
+            if (connectionChoiceCanCancel && touchInside(105, 202, 110, 30)) return 2;
+            return -1;
+        }
+        if (settingsScreen == SettingsScreen::WifiSettings) {
+            if (touchInside(105, 204, 110, 28)) return 0;
+            return -1;
+        }
 		if (settingsScreen == SettingsScreen::Main)
 		{
 			if (touchInside(30, 55, 260, 48)) return 0;
@@ -2042,19 +2088,22 @@ public:
 		}
 		else if (settingsScreen == SettingsScreen::DeviceSettings)
 		{
-			if (touchInside(30, 72, 70, 48)) return 0;
-			if (touchInside(220, 72, 70, 48)) return 1;
-			if (touchInside(30, 132, 260, 38)) return 2;
-			if (touchInside(30, 182, 260, 38)) return 3;
+			if (touchInside(20, 50, 50, 38)) return 0;
+			if (touchInside(250, 50, 50, 38)) return 1;
+			if (touchInside(20, 111, 135, 38)) return 2;
+			if (touchInside(165, 111, 135, 38)) return 3;
+			if (touchInside(20, 158, 280, 38)) return 4;
+			if (touchInside(20, 204, 280, 28)) return 5;
 		}
-		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
+		else if (settingsScreen == SettingsScreen::ResetConfirmation)
 		{
 			if (touchInside(25, 135, 120, 62)) return 0;
 			if (touchInside(175, 135, 120, 62)) return 1;
 		}
 		else if (settingsScreen == SettingsScreen::TouchCalibration)
 		{
-			if (touchInside(224, 76, 56, 56)) return 0;
+			if (int32_t(millis() - touchCalibrationReadyAt) >= 0 &&
+				touchInside(40, 76, 56, 56)) return 0;
 			const bool originalCancel =
 				originalTouchX >= 25 && originalTouchX < 150 &&
 				originalTouchY >= 169 && originalTouchY < 219;
@@ -2066,7 +2115,17 @@ public:
 
 	void activateSettingsButton(int button)
 	{
-		if (settingsScreen == SettingsScreen::Main)
+		if (settingsScreen == SettingsScreen::ConnectionChoice)
+		{
+			if (button == 0) requestConnection(TelemetryMode::GT7, SettingsScreen::ConnectionChoice);
+			else if (button == 1) selectConnection(TelemetryMode::SimHub);
+			else if (button == 2 && connectionChoiceCanCancel) closeSettings();
+		}
+		else if (settingsScreen == SettingsScreen::WifiSettings)
+		{
+			if (button == 0) cancelPendingGT7();
+		}
+		else if (settingsScreen == SettingsScreen::Main)
 		{
 			if (button == 0)
 				showSettingsScreen(SettingsScreen::ThemeSelection);
@@ -2132,26 +2191,30 @@ public:
 				drawDeviceBrightnessValue();
 			}
 			else if (button == 2)
-			{
-				showWifiResetConfirm();
-			}
-			else if (button == 3)
-			{
-				showSettingsScreen(SettingsScreen::Main);
-			}
+				requestConnection(TelemetryMode::GT7, SettingsScreen::DeviceSettings);
+			else if (button == 3) selectConnection(TelemetryMode::SimHub);
+			else if (button == 4) showWifiResetConfirm();
+			else if (button == 5) showSettingsScreen(SettingsScreen::Main);
 		}
-		else if (settingsScreen == SettingsScreen::WifiResetConfirmation)
-		{
-			if (button == 0)
-			{
-				showSettingsScreen(SettingsScreen::DeviceSettings);
-			}
-			else if (button == 1)
-			{
-				showWifiResettingScreen();
-				wifiResetRequested = true;
-			}
-		}
+        else if (settingsScreen == SettingsScreen::ResetConfirmation) {
+            if (button == 1) {
+                if (dashboardPreferencesReady) dashboardPreferences.clear();
+                activeDashboardTheme = renderedDashboardTheme = previewDashboardTheme = DashboardTheme::GT3;
+                userBrightnessPercent = DEFAULT_BRIGHTNESS_PERCENT;
+                touchRotation = pendingTouchRotation = TouchRotation::Deg0;
+                touchSetupRequired = true;
+                connectionChoiceCanCancel = false;
+                gt7SelectionPending = false;
+                telemetry.mode = TelemetryMode::Auto;
+                telemetry.active = TelemetrySource::None;
+                firstRun = true;
+                wifiConfigured = false;
+                wifiResetRequested = true;
+                networkChanged = true;
+                tft.setBrightness(normalBrightness());
+                showSettingsScreen(SettingsScreen::InitialTouch);
+            } else showSettingsScreen(SettingsScreen::DeviceSettings);
+        }
 		else if (settingsScreen == SettingsScreen::TouchCalibration)
 		{
 			if (button == 0)
@@ -2162,7 +2225,11 @@ public:
 			}
 			else if (button == 1)
 			{
-				closeSettings();
+				if (touchSetupRequired) {
+					pendingTouchRotation = touchRotation;
+					touchCalibrationVerified = false;
+					showSettingsScreen(SettingsScreen::InitialTouch);
+				} else closeSettings();
 			}
 			else if (button == 2 && touchCalibrationVerified)
 			{
@@ -2170,7 +2237,11 @@ public:
 				if (dashboardPreferencesReady)
 					dashboardPreferences.putUChar(
 						"touchRot", static_cast<uint8_t>(touchRotation));
-				closeSettings();
+				if (touchSetupRequired) {
+					touchSetupRequired = false;
+					connectionChoiceCanCancel = false;
+					showSettingsScreen(SettingsScreen::ConnectionChoice);
+				} else closeSettings();
 			}
 		}
 	}
@@ -2185,11 +2256,15 @@ public:
 
 		static bool wasTouched = false;
 		static bool waitForReleaseAfterScreenChange = false;
+		static bool waitingConnectionPressed = false;
+		static uint16_t initialTouchRawX = 0, initialTouchRawY = 0;
 		uint16_t rawTouchX = 0;
 		uint16_t rawTouchY = 0;
 		const bool isTouched = tft.getTouch(&rawTouchX, &rawTouchY);
 		if (isTouched)
 		{
+			initialTouchRawX = rawTouchX;
+			initialTouchRawY = rawTouchY;
 			applyTouchRotation(
 				rawTouchX, rawTouchY, touchRotation, originalTouchX, originalTouchY);
 			const TouchRotation effectiveRotation =
@@ -2200,15 +2275,16 @@ public:
 				rawTouchX, rawTouchY, effectiveRotation, touchX, touchY);
 		}
 
-		if (touchCalibrationAwaitingSecondTap &&
-			millis() - touchCalibrationFirstTapTime > TOUCH_CALIBRATION_DOUBLE_TAP_MS)
+		if (settingsScreen == SettingsScreen::InitialTouch)
 		{
-			touchCalibrationAwaitingSecondTap = false;
-			touchCalibrationFirstTapTime = 0;
-			pendingTouchRotation = touchRotation;
-			if (!previousGameRunning && !screenSleeping &&
-				settingsScreen == SettingsScreen::Closed)
-				drawTouchCalibrationHint(false);
+			if (!isTouched && wasTouched)
+			{
+				const int candidate = calibrationRotationForTouch(
+					initialTouchRawX, initialTouchRawY, 252, 120, 34, 34);
+				if (candidate >= 0) showTouchCalibration(static_cast<TouchRotation>(candidate));
+			}
+			wasTouched = isTouched;
+			return;
 		}
 
 		if (waitForReleaseAfterScreenChange)
@@ -2252,26 +2328,15 @@ public:
 		{
 			gameStoppedTimerStarted = true;
 			gameStoppedTime = millis();
-			if (settingsScreen == SettingsScreen::Closed)
-			{
-				const int candidate = calibrationRotationForTouch(rawTouchX, rawTouchY);
-				touchCalibrationEntryArmed = candidate >= 0;
-				if (candidate >= 0)
-				{
-					if (touchCalibrationAwaitingSecondTap &&
-						candidate != static_cast<int>(pendingTouchRotation))
-					{
-						touchCalibrationAwaitingSecondTap = false;
-						touchCalibrationFirstTapTime = 0;
-					}
-					pendingTouchRotation = static_cast<TouchRotation>(candidate);
-				}
+			if (settingsScreen == SettingsScreen::Closed) {
+				waitingConnectionPressed = waitingConnectionSwitchAtTouch();
+				if (waitingConnectionPressed) drawWaitingConnectionSwitch(true);
 			}
 		}
 
 		if (settingsScreen != SettingsScreen::Closed)
 		{
-			if (!isTouched && settingsLastInteractionTime != 0 &&
+			if (!firstRun && settingsScreen != SettingsScreen::WifiSettings && !isTouched && settingsLastInteractionTime != 0 &&
 				millis() - settingsLastInteractionTime >= SETTINGS_TIMEOUT_MS)
 			{
 				closeSettings();
@@ -2303,29 +2368,15 @@ public:
 
 		if (!isTouched && wasTouched)
 		{
-			if (touchCalibrationEntryArmed)
-			{
-				if (touchCalibrationAwaitingSecondTap &&
-					millis() - touchCalibrationFirstTapTime <= TOUCH_CALIBRATION_DOUBLE_TAP_MS)
-				{
-					touchCalibrationAwaitingSecondTap = false;
-					showTouchCalibration(pendingTouchRotation);
-				}
-				else
-				{
-					touchCalibrationAwaitingSecondTap = true;
-					touchCalibrationFirstTapTime = millis();
-					drawTouchCalibrationHint(true);
-				}
-			}
-			else
-			{
-				touchCalibrationAwaitingSecondTap = false;
-				touchCalibrationFirstTapTime = 0;
+			if (waitingConnectionPressed) {
+				const bool activate = waitingConnectionSwitchAtTouch();
+				waitingConnectionPressed = false;
+				if (activate) switchConnectionFromWaiting();
+				else drawWaitingConnectionSwitch(false);
+			} else {
 				showSettingsScreen(SettingsScreen::Main);
+				waitForReleaseAfterScreenChange = true;
 			}
-			touchCalibrationEntryArmed = false;
-			waitForReleaseAfterScreenChange = true;
 		}
 
 		wasTouched = isTouched;
@@ -2346,7 +2397,7 @@ public:
 
 		const bool isTouched = tft.getTouch(&touchX, &touchY);
 
-		// 長按開啟確認畫面後，必須先放開，避免同一次觸控誤按 YES／NO。
+		// ?瑟???蝣箄??恍敺?敹?????踹???甈∟孛?扯炊??YES嚗O??
 		if (waitForReleaseAfterDialog)
 		{
 			if (!isTouched)
@@ -2357,7 +2408,7 @@ public:
 			return;
 		}
 
-		// 確認畫面中的按鈕處理。
+		// 蝣箄??恍銝剔???????
 		if (wifiResetConfirmOpen)
 		{
 			if (isTouched && !wasTouched)
@@ -2397,14 +2448,14 @@ public:
 			return;
 		}
 
-		// 手指剛碰到螢幕：開始計算長按時間。
+		// ???１?啗撟???閮??瑟?????
 		if (isTouched && !wasTouched)
 		{
 			touchStartTime = millis();
 			longPressTriggered = false;
 		}
 
-		// 全螢幕持續按住 6 秒：顯示 Wi-Fi 重設確認畫面。
+		// ?刻撟?蝥?雿?6 蝘?憿舐內 Wi-Fi ?身蝣箄??恍??
 		if (isTouched &&
 			!longPressTriggered &&
 			millis() - touchStartTime >= WIFI_RESET_HOLD_MS)
@@ -2417,7 +2468,7 @@ public:
 			return;
 		}
 
-		// 未達 6 秒便放開：維持原本的短按亮屏／熄屏功能。
+		// ?芷? 6 蝘噶?暸?嚗雁???祉??剜?鈭桀?嚗?撅??賬?
 		if (!isTouched && wasTouched && !longPressTriggered)
 		{
 			if (screenSleeping)

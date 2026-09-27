@@ -228,7 +228,7 @@
 		const int brakeApplied = constrain(state.absFilteredLevel.toInt(), 0, 100);
 		const int throttleInput = constrain(state.tcLevel.toInt(), 0, 100);
 		const int throttleApplied = constrain(state.tcFilteredLevel.toInt(), 0, 100);
-		const String cacheState = String(brakeInput) + ":" + String(brakeApplied) +
+		const String cacheState = state.absLevel + ":" + state.tcLevel + ":" + String(brakeInput) + ":" + String(brakeApplied) +
 			":" + String(throttleInput) + ":" + String(throttleApplied);
 		if (!forceUpdate && prevData["monoPedals"] == cacheState) return;
 
@@ -254,6 +254,7 @@
 		{
 			const int y = 2 + row * 10;
 			sprite.drawRect(12, y, 124, 7, frame);
+            if ((row == 0 ? state.absLevel : state.tcLevel) == "--") sprite.drawString("--", 65, y, 1);
 			const int inputW = 122 * values[row][0] / 100;
 			const int appliedW = 122 * values[row][1] / 100;
 			if (inputW > 0) sprite.fillRect(13, y + 1, inputW, 5, input);

@@ -6,7 +6,9 @@
 
 一個專為 **Gran Turismo 7** 打造、完全運行於 **ESP32** 的獨立儀表板。
 
-**不需要 SimHub • 不需要 PC • 自動搜尋 PS5**
+**GT7 直連不需要 SimHub 或 PC；PC 遊戲可使用 SimHub USB。**
+
+> **原始碼新功能：** 雙來源功能需編譯此份原始碼；網站安裝器仍提供已發布版本。請參閱 [SimHub USB 設定](SIMHUB_README.zh-TW.md)。
 
 <p align="center">
   <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
@@ -42,7 +44,8 @@
 - 🚗 透過 Wi-Fi 直接接收 GT7 遙測資料
 - 📡 自動搜尋並連線 PS5
 - 🔍 不需要手動設定 PS5 IP 位址
-- ⚡ 不需要 SimHub
+- 🔌 可選 SimHub USB，所有主題共用[一份公式](simhub/custom-protocol.txt)
+- ⚡ GT7 直連不需要 SimHub
 - 💻 安裝完成後不需要電腦
 - 📶 內建 Wi-Fi 設定頁面
 - 🏁 目前圈速、上一圈、最佳圈
@@ -89,7 +92,7 @@
   <img src="photos/theme_all.jpg" width="900" alt="Classic、GT3、Radar 與 Retro 四種儀表主題預覽">
 </p>
 
-螢幕亮起時點一下，選擇 **SELECT THEME**，再選取需要的主題。主題會以固定 enum 值儲存並在重新開機後恢復；重設 Wi-Fi 不會清除主題或亮度設定。
+螢幕亮起時點一下，選擇 **SELECT THEME**，再選取需要的主題。主題會以固定 enum 值儲存並在重新開機後恢復；切換 telemetry 連線不會清除主題或亮度設定。
 
 ---
 
@@ -117,7 +120,18 @@
 
 ### 首次設定
 
-第一次開機（或重設 Wi-Fi 後），裝置會自動進入 Wi-Fi 設定模式。
+全新裝置會先進行觸控設定，再選擇 **DIRECT GT7** 或 **SIMHUB USB**；選擇會保存供後續開機使用。
+
+- **SimHub USB：** 用可傳資料的 USB 線連接 PC，依 [SimHub 設定說明](SIMHUB_README.zh-TW.md) 貼入公式，不必配網。
+- **DIRECT GT7：** 只啟用 Wi-Fi 與 GT7 UDP；沒有已存網路時會自動開啟 Wi-Fi Setup。
+- **SIMHUB USB：** 只啟用 USB Custom Protocol，Wi-Fi 保持關閉。
+- **GT7：** 沒有網路或已儲存網路連線失敗時提供配網，依下方步驟設定。
+
+兩條連線路徑彼此獨立。可直接在 Waiting 畫面切換，或在 **DEVICE SETTINGS** 選擇 **DIRECT GT7**／**SIMHUB USB**。
+
+七個主題共用兩種來源，缺值顯示 `--` 或停用對應提示。GT7 專用推算不會套用到 SimHub。
+
+GT7 Wi-Fi 設定步驟：
 
 1. 使用手機或電腦連接下列 Wi-Fi：
 
@@ -136,7 +150,7 @@ http://192.168.4.1
 3. 選擇家中的 Wi-Fi。
 4. 輸入 Wi-Fi 密碼。
 5. 點擊 **Save**。
-6. 裝置會自動重新啟動。
+6. 裝置背景連線成功後自動關閉首次設定畫面，不必重新啟動。
 7. 開啟 **Gran Turismo 7**。
 
 <p align="center">
@@ -147,14 +161,12 @@ http://192.168.4.1
 
 ### 觸控方向設定
 
-如果畫面顯示正常，但觸控方向旋轉了，可在等待遙測畫面上方使用 **TOUCH SETUP**：
+全新裝置或執行 **RESET TO DEFAULT** 後會先進入 Touch Setup：
 
-1. 點一下 **TOUCH SETUP**，提示會變成 **TOUCH AGAIN**。
-2. 在三秒內再次點擊相同的實體位置。
-3. 進入 Touch Setup 後，點擊畫面上的測試靶以確認偵測到的方向。
-4. 點擊 **SAVE** 儲存，或點擊 **CANCEL** 保留原本方向。
-
-未完成的設定會逾時退出且不會儲存；收到 GT7 遙測資料時也會立即退出，不會卡住儀表畫面。如果誤存錯誤方向，只要回到等待畫面再次執行相同步驟即可覆蓋。
+1. 點擊右側目標，讓韌體判斷觸控方向。
+2. 點擊左側驗證目標；目標位置不同，可避免快速連點造成誤判。
+3. 方向正確時點擊 **SAVE**，判斷錯誤則點擊 **RETRY** 回到第一步。
+4. 選擇 Direct GT7 或 SimHub USB。
 
 ---
 
@@ -168,7 +180,8 @@ http://192.168.4.1
 - 螢幕休眠時只喚醒顯示，第一次點擊不會同時進入設定。
 - 選擇並儲存 Classic、GT3、Retro、Radar、Mono、Pocket 或 Endurance 儀表主題。
 - 進入 **DEVICE SETTINGS**，以 10% 級距調整 20%～100% 的亮度。
-- 從 Device Settings 透過獨立確認畫面重設已儲存的 Wi-Fi。
+- 可從 Waiting 畫面快速切換，也可直接在 **DEVICE SETTINGS** 選擇 Direct GT7／SimHub USB，其他設定會保留。
+- **RESET TO DEFAULT** 會清除 Wi-Fi、連線模式、觸控方向、主題與亮度，然後回到首次觸控設定。
 
 亮度預設為 80%，調整後會儲存，重新開機或喚醒時會恢復；自動休眠仍會完全關閉背光。
 

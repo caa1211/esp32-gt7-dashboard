@@ -41,7 +41,7 @@ FullLoopbackStream incomingStream;
   static constexpr const char *GT7_SETUP_AP_NAME = "GT7-DASH-SETUP";
 #endif
 
-#define DEVICE_NAME "HelloWorldEsp" //{"Group":"General","Name":"DEVICE_NAME","Title":"Device name,\r\n make sure to use a unique name when using multiple arduinos","DefaultValue":"SimHub Dash","Type":"string","Template":"#define DEVICE_NAME \"{0}\""}
+#define DEVICE_NAME "GT7 SimHub Dash" //{"Group":"General","Name":"DEVICE_NAME","Title":"Device name,\r\n make sure to use a unique name when using multiple arduinos","DefaultValue":"SimHub Dash","Type":"string","Template":"#define DEVICE_NAME \"{0}\""}
 
 // Known working features:
 //  
@@ -1124,6 +1124,38 @@ void buttonMatrixStatusChanged(int buttonId, byte Status) {
 
 
 
+#include "DashboardNetwork.h"
+DashboardNetwork dashboardNetwork;
+bool dashboardNetworkReady = false;
+bool gt7SocketReady = false;
+void setupDashboardNetwork() {
+    dashboardNetworkReady = dashboardNetwork.begin();
+}
+void serviceDashboardNetwork() {
+    if (!dashboardNetworkReady) {
+        shCustomProtocol.networkState("Wi-Fi unavailable; USB ready", false, false); return;
+    }
+    const auto mode = shCustomProtocol.telemetryMode();
+    if (shCustomProtocol.takeNetworkChange()) {
+        gt7Telem.stop(); gt7SocketReady = false;
+        dashboardNetwork.send(DashboardNetwork::Action::Configure, mode, shCustomProtocol.needsFirstSetup());
+    }
+    if (shCustomProtocol.takeWifiResetRequest()) {
+        gt7Telem.stop(); gt7SocketReady = false;
+        dashboardNetwork.send(DashboardNetwork::Action::Reset, mode);
+    }
+    if (shCustomProtocol.takeWifiStopRequest()) dashboardNetwork.send(DashboardNetwork::Action::StopPortal, mode);
+    DashboardNetwork::Status status;
+    if (dashboardNetwork.receive(status)) {
+        shCustomProtocol.networkState(status.message, status.portal, status.connected, status.configured);
+        const bool connected = mode == TelemetryMode::GT7 && status.connected;
+        if (connected && !gt7SocketReady) {
+            gt7Telem.begin(IPAddress(255,255,255,255), 'C'); gt7SocketReady = true;
+        } else if (!connected && gt7SocketReady) { gt7Telem.stop(); gt7SocketReady = false; }
+    }
+    shCustomProtocol.setGT7TransportReady(gt7SocketReady);
+}
+
 void setup()
 {
 #if INCLUDE_WIFI
@@ -1144,11 +1176,8 @@ void setup()
 	shFUELPIN.SetValue((int)80);
 #endif
 
-#if INCLUDE_GT7_WIFI
-    FlowSerialBegin(115200);
-#else
-    FlowSerialBegin(19200);
-#endif
+    Serial.setRxBufferSize(1024);
+    FlowSerialBegin(19200); // SimHub discovers at 19200, then negotiates its baud rate.
  
 
 #ifdef INCLUDE_GAMEPAD
@@ -1314,91 +1343,8 @@ void setup()
 	shCustomProtocol.setup();
 	arqserial.setIdleFunction(idle);
 
-#if INCLUDE_GT7_WIFI
-	delay(1000);
-
-	WiFi.mode(WIFI_STA);
-
-	WiFiManager wifiManager;
-	// for test reset
-	// wifiManager.resetSettings();
-
-	wifiManager.setConnectTimeout(6);
-	wifiManager.setConfigPortalBlocking(true);
-	wifiManager.setClass("invert");
-	wifiManager.setTitle("GT7 DASH SETUP");
-	std::vector<const char *> menu = {
-		"wifi",
-		"restart",
-		"info"
-	};
-	wifiManager.setMenu(menu);
-	Serial.println();
-	Serial.println("Connecting to saved Wi-Fi...");
-	Serial.print("If connection fails, connect your phone to: ");
-	Serial.println(GT7_SETUP_AP_NAME);
-	Serial.println("Then open http://192.168.4.1 if the setup page does not appear automatically.");
-
-	wifiManager.setAPCallback([](WiFiManager *manager)
-							  {
-								  Serial.println("=== WiFi setup portal started ===");
-								  showWifiSetupScreen(); });
-
-	wifiManager.setBreakAfterConfig(true);
-
-	while (WiFi.status() != WL_CONNECTED)
-	{
-		Serial.println("Starting Wi-Fi setup portal...");
-
-		const bool portalResult =
-			wifiManager.autoConnect(GT7_SETUP_AP_NAME);
-
-		Serial.print("autoConnect result: ");
-		Serial.println(portalResult ? "true" : "false");
-
-		Serial.print("WiFi status: ");
-		Serial.println(WiFi.status());
-
-		// 不看 autoConnect() 回傳值，只確認 ESP32 是否真的連上
-		if (WiFi.status() == WL_CONNECTED)
-		{
-			break;
-		}
-
-		Serial.println("Wi-Fi connection failed.");
-		showWifiConnectionFailedScreen();
-
-		delay(100);
-	}
-
-	Serial.println("Wi-Fi connected.");
-	Serial.print("SSID: ");
-	Serial.println(WiFi.SSID());
-	Serial.print("ESP32 IP: ");
-	Serial.println(WiFi.localIP());
-
-	// Phase 1 keeps the existing fixed PS5 IP. Auto discovery comes next.
-	// IPAddress ps5IP(192, 168, 1, 145);
-	// gt7Telem.begin(ps5IP, 'C');
-	// Serial.print("PS5 IP: ");
-	// Serial.println(ps5IP);
-
-	IPAddress gt7BroadcastIP(255, 255, 255, 255);
-
-	gt7Telem.begin(gt7BroadcastIP, 'C');
-
-	Serial.println("GT7 auto discovery enabled");
-	Serial.print("Broadcast address: ");
-	Serial.println(gt7BroadcastIP);
-
-	// 明確停止 WiFiManager portal
-    wifiManager.stopConfigPortal();
-	// 關閉設定用的 SoftAP，只保留 STA
-    WiFi.softAPdisconnect(true);
-	WiFi.mode(WIFI_STA);
-#endif
-
-delay(1000);
+    shCustomProtocol.initializeTelemetry();
+    setupDashboardNetwork();
 
 #if(GAMEPAD_AXIS_01_ENABLED == 1)
 	SHGAMEPADAXIS01.SetJoystick(&Joystick);
@@ -1507,23 +1453,15 @@ void loop() {
 	UpdateGamepadState();
 #endif
 	shCustomProtocol.loop();
-#if INCLUDE_GT7_WIFI
-    if (shCustomProtocol.takeWifiResetRequest())
-    {
-        Serial.println("Clearing saved Wi-Fi settings...");
+    serviceDashboardNetwork();
+    shCustomProtocol.pollCustomProtocol();
 
-        WiFiManager wifiManager;
-        wifiManager.resetSettings();
-
-        delay(1000);
-        ESP.restart();
-    }
-#endif
 	// Wait for data
-	if (FlowSerialAvailable() > 0) {
+	if (!shCustomProtocol.customReadPending() && FlowSerialAvailable() > 0) {
 		if (FlowSerialTimedRead() == MESSAGE_HEADER)
 		{
 			lastSerialActivity = millis();
+            shCustomProtocol.noteUsbCommand();
 			// Read command
 			loop_opt = FlowSerialTimedRead();
 

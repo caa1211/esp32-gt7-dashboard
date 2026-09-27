@@ -70,9 +70,9 @@
 			ROW[2],
 			CELL_WIDTH * 2 - 2,
 			CELL_HEIGHT - 1,
-			constrain(state.tcLevel.toInt(), 0, 100),
+			state.tcLevel == "--" ? -1 : constrain(state.tcLevel.toInt(), 0, 100),
 			constrain(state.tcFilteredLevel.toInt(), 0, 100),
-			constrain(state.absLevel.toInt(), 0, 100),
+			state.absLevel == "--" ? -1 : constrain(state.absLevel.toInt(), 0, 100),
 			constrain(state.absFilteredLevel.toInt(), 0, 100),
 			forceUpdate);
 
@@ -772,9 +772,9 @@
 		int brakeAppliedPercent,
 		bool forceUpdate = false)
 	{
-		throttlePercent = constrain(throttlePercent, 0, 100);
+		throttlePercent = constrain(throttlePercent, -1, 100);
 		throttleAppliedPercent = constrain(throttleAppliedPercent, 0, 100);
-		brakePercent = constrain(brakePercent, 0, 100);
+		brakePercent = constrain(brakePercent, -1, 100);
 		brakeAppliedPercent = constrain(brakeAppliedPercent, 0, 100);
 
 		// 上下兩格，而不是左右兩格。
@@ -790,6 +790,16 @@
 								 const char *id,
 								 uint16_t color)
 		{
+            if (percent < 0) {
+                if (forceUpdate || prevData[id] != "--") {
+                    tft.fillRect(x, cellY, totalWidth, cellHeight, TFT_BLACK);
+                    tft.drawRoundRect(x, cellY, totalWidth, cellHeight, 5, TFT_DARKGREY);
+                    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK); tft.setTextDatum(MC_DATUM);
+                    tft.drawString("--", x + totalWidth / 2, cellY + cellHeight / 2, 2);
+                    prevData[id] = "--";
+                }
+                return;
+            }
 			const String state = String(percent) + ":" + String(appliedPercent);
 			const bool firstDraw = true;
 			const int oldPercent = 0;

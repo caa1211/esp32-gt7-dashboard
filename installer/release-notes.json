@@ -1,4 +1,10 @@
 {
+  "2.0.0": [
+    "Added explicit Direct GT7 Wi-Fi and SimHub USB connection modes with persistent on-device selection.",
+    "Added a shared SimHub Custom Protocol for all seven dashboard themes, including missing-value handling and transient neutral filtering.",
+    "Redesigned first-time touch, Wi-Fi, connection and reset flows with recoverable setup and direct connection switching from the Waiting screen.",
+    "Updated Device Settings and bilingual SimHub documentation for the new dual-source workflow."
+  ],
   "1.9.1": [
     "Redesigned the Wi-Fi setup screen with a QR code for joining GT7-DASH-SETUP, clearer manual connection instructions and the setup address."
   ],
