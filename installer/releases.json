@@ -1,6 +1,17 @@
 {
   "versions": [
     {
+      "version": "2.0.1",
+      "notes": [
+        "Fixed blank reverse gear in Mono and blank neutral/reverse gears in Retro and Radar when using SimHub.",
+        "Matched Mono neutral and reverse letters with consistent full-stroke glyphs while preserving the numeric gear style."
+      ],
+      "manifests": {
+        "ili9341": "versions/2.0.1/manifest-ili9341.json",
+        "st7789": "versions/2.0.1/manifest-st7789.json"
+      }
+    },
+    {
       "version": "2.0.0",
       "notes": [
         "Added explicit Direct GT7 Wi-Fi and SimHub USB connection modes with persistent on-device selection.",
@@ -110,16 +121,6 @@
       "manifests": {
         "ili9341": "versions/1.3.0/manifest-ili9341.json",
         "st7789": "versions/1.3.0/manifest-st7789.json"
-      }
-    },
-    {
-      "version": "1.2.7",
-      "notes": [
-        "Added telemetry-driven RPM colours and progressive GT7 shift-warning pulse."
-      ],
-      "manifests": {
-        "ili9341": "versions/1.2.7/manifest-ili9341.json",
-        "st7789": "versions/1.2.7/manifest-st7789.json"
       }
     }
   ]

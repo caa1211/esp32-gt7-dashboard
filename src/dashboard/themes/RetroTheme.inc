@@ -278,8 +278,11 @@
 		drawRetroRpm(state, forceUpdate);
 		drawRetroTextValueBuffered(7, 77, 84, 62, state.speed, "retroSpeed", ink,
 			7, MC_DATUM, forceUpdate, speedSprite, speedSpriteCreated, 0.72f, 0.82f);
+		// Font 7 renders N/R as spaces. Keep its numeric style for forward gears.
+		const bool letterGear = state.gear == "N" || state.gear == "R";
 		drawRetroTextValue(104, 76, 74, 72, state.gear, "retroGear", ink,
-			7, MC_DATUM, forceUpdate, 1.20f, 1.22f);
+			letterGear ? 4 : 7, MC_DATUM, forceUpdate,
+			letterGear ? 2.1f : 1.20f, letterGear ? 2.1f : 1.22f);
 
 		// Keep labels and values on separate rows. Fractionally scaled bitmap fonts
 		// produced malformed glyphs on the 2.8-inch panel, so Retro uses native sizes.
