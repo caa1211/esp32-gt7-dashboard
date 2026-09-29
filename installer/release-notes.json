@@ -1,4 +1,8 @@
 {
+  "2.0.1": [
+    "Fixed blank reverse gear in Mono and blank neutral/reverse gears in Retro and Radar when using SimHub.",
+    "Matched Mono neutral and reverse letters with consistent full-stroke glyphs while preserving the numeric gear style."
+  ],
   "2.0.0": [
     "Added explicit Direct GT7 Wi-Fi and SimHub USB connection modes with persistent on-device selection.",
     "Added a shared SimHub Custom Protocol for all seven dashboard themes, including missing-value handling and transient neutral filtering.",

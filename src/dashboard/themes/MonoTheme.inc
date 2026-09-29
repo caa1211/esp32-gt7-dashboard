@@ -28,22 +28,41 @@
 		static constexpr int32_t height = 80;
 		tft.fillRect(x, y, width, height, TFT_BLACK);
 
-		if (gear == "N")
+		if (gear == "N" || gear == "R")
 		{
-			// Font 7 only contains digits. Draw a matching heavy, angular N for neutral.
+			// Match both letters to the same visible bounds and heavy angular strokes.
 			static constexpr int32_t left = 134;
 			static constexpr int32_t top = 63;
 			static constexpr int32_t glyphWidth = 52;
 			static constexpr int32_t glyphHeight = 66;
 			static constexpr int32_t stroke = 8;
 			tft.fillRect(left, top, stroke, glyphHeight, color);
-			tft.fillRect(left + glyphWidth - stroke, top, stroke, glyphHeight, color);
-			tft.fillTriangle(left + stroke, top,
-				left + stroke, top + 12,
-				left + glyphWidth - stroke, top + glyphHeight, color);
-			tft.fillTriangle(left + stroke, top,
-				left + glyphWidth - stroke, top + glyphHeight - 12,
-				left + glyphWidth - stroke, top + glyphHeight, color);
+			if (gear == "R")
+			{
+				static constexpr int32_t bowlHeight = 34;
+				tft.fillRect(left + stroke, top, glyphWidth - stroke, stroke, color);
+				tft.fillRect(left + glyphWidth - stroke, top + stroke,
+					stroke, bowlHeight - stroke, color);
+				tft.fillRect(left + stroke, top + bowlHeight - stroke,
+					glyphWidth - stroke, stroke, color);
+				// Diagonal leg joins the bowl and ends at the same baseline as N.
+				tft.fillTriangle(left + 22, top + bowlHeight - stroke,
+					left + 32, top + bowlHeight - stroke,
+					left + glyphWidth - 1, top + glyphHeight - 1, color);
+				tft.fillTriangle(left + 22, top + bowlHeight - stroke,
+					left + glyphWidth - 1, top + glyphHeight - 1,
+					left + glyphWidth - 11, top + glyphHeight - 1, color);
+			}
+			else
+			{
+				tft.fillRect(left + glyphWidth - stroke, top, stroke, glyphHeight, color);
+				tft.fillTriangle(left + stroke, top,
+					left + stroke, top + 12,
+					left + glyphWidth - stroke, top + glyphHeight, color);
+				tft.fillTriangle(left + stroke, top,
+					left + glyphWidth - stroke, top + glyphHeight - 12,
+					left + glyphWidth - stroke, top + glyphHeight, color);
+			}
 		}
 		else
 		{

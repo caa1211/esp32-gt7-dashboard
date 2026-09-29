@@ -422,8 +422,11 @@
 		drawRadarStatusDot(75, 226, isActiveValue(state.tcActive), "radarTcs",
 			blue, muted, redraw);
 
+		// Font 7 renders N/R as spaces. Use Font 4 for these letter gears.
+		const bool letterGear = state.gear == "N" || state.gear == "R";
 		drawRadarValue(116, 63, 88, 56, state.gear, "radarGear",
-			TFT_WHITE, 7, MC_DATUM, redraw, 0.98f, 1.0f);
+			TFT_WHITE, letterGear ? 4 : 7, MC_DATUM, redraw,
+			letterGear ? 1.7f : 0.98f, letterGear ? 1.7f : 1.0f);
 		drawRadarValueBuffered(115, 121, 90, 39, state.speed, "radarSpeed",
 			TFT_WHITE, 7, MC_DATUM, redraw, speedSprite, speedSpriteCreated,
 			0.66f, 0.72f);
