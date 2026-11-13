@@ -11,7 +11,7 @@
 > **v2.0.0 新功能：** 支援 Direct GT7 Wi-Fi 與 SimHub USB 兩種連線模式，可透過[網站安裝器](https://caa1211.github.io/esp32-gt7-dashboard/?lang=zh-TW)直接安裝，無需自行編譯。使用 SimHub 請參閱 [SimHub USB 設定](SIMHUB_README.zh-TW.md)。
 
 <p align="center">
-  <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
+  <img src="photos/new_shell/02.jpg" width="900" alt="ESP32 GT7 Dashboard">
 </p>
 
 <p align="center">
@@ -287,6 +287,14 @@ https://github.com/tzapu/WiFiManager
 提供 Wi-Fi 設定頁面與 Captive Portal 功能。
 
 ### ESP32 CYD 3D 列印外殼
+
+#### 1. ESP32 GT7 Dashboard 專用外殼（推薦）
+
+熱心網友專為這個儀表板製作了非常出色的外殼，頁首照片展示的就是這款設計。感謝他用心製作，並將模型分享給社群！
+
+[ESP32 GT7 Dashboard 外殼模型（MakerWorld）](https://makerworld.com/zh/models/3589327-esp32-gt7-dashboard)
+
+#### 2. ESP32 CYD 輕薄外殼
 
 MakerWorld 上提供了一款專為 **ESP32-2432S028（2.8 吋 CYD）** 設計的輕薄外殼。
 

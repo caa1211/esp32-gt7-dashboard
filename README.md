@@ -11,7 +11,7 @@ GT7 needs no PC or SimHub; PC games use the bundled SimHub Custom Protocol.
 > **New in v2.0.0:** Direct GT7 Wi-Fi and SimHub USB connection modes are available through the [web installer](https://caa1211.github.io/esp32-gt7-dashboard/?lang=en), with no compilation required. For SimHub, see [SimHub USB setup](SIMHUB_README.md).
 
 <p align="center">
-  <img src="photos/001.jpg" width="900" alt="ESP32 GT7 Dashboard">
+  <img src="photos/new_shell/02.jpg" width="900" alt="ESP32 GT7 Dashboard">
 </p>
 
 <p align="center">
@@ -265,6 +265,14 @@ https://github.com/tzapu/WiFiManager
 Provides the Wi-Fi configuration portal and captive portal functionality.
 
 ### 3D Printed Case for ESP32 CYD
+
+#### 1. ESP32 GT7 Dashboard Case (Recommended)
+
+A community member created this excellent enclosure specifically for the dashboard, shown in the first photo above. Many thanks for the thoughtful design and for sharing the model with the community!
+
+[ESP32 GT7 Dashboard case on MakerWorld](https://makerworld.com/zh/models/3589327-esp32-gt7-dashboard)
+
+#### 2. Slim Minimal Case for ESP32 CYD
 
 A slim, minimalist enclosure designed specifically for the **ESP32-2432S028 (2.8" CYD)** is available on MakerWorld.
 
